@@ -1,0 +1,19 @@
+<!doctype html>
+<meta charset="utf-8" />
+<title>PODMEI deploy</title>
+<body>enviando…</body>
+<script>
+(async () => {
+  try {
+    const buf = await fetch("/podmei-pub.zip").then((r) => {
+      if (!r.ok) throw new Error("zip " + r.status);
+      return r.arrayBuffer();
+    });
+    if (!window.opener) throw new Error("sem opener");
+    window.opener.postMessage({ type: "podmei-zip", buf }, "*");
+    document.body.textContent = "enviado " + buf.byteLength;
+  } catch (e) {
+    document.body.textContent = String(e);
+  }
+})();
+</script>

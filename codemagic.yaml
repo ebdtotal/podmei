@@ -1,0 +1,72 @@
+workflows:
+  ios-testflight:
+    name: PODMEI App Store
+    instance_type: mac_mini_m2
+    max_build_duration: 75
+    triggering:
+      events:
+        - push
+      branch_patterns:
+        - pattern: main
+          include: true
+          source: true
+      cancel_previous_builds: true
+    environment:
+      groups:
+        - app_store_credentials
+      vars:
+        BUNDLE_ID: br.com.podmei.app
+        XCODE_PROJECT: ios/App/App.xcodeproj
+        XCODE_SCHEME: App
+      node: v22
+    scripts:
+      - name: Instalar dependências
+        script: npm ci
+      - name: Build web e sync Capacitor
+        script: |
+          npm run build
+          npx cap sync ios
+      - name: Número de build
+        script: |
+          BUILD="${BUILD_NUMBER:-$CM_BUILD_NUMBER}"
+          sed -i '' "s/CURRENT_PROJECT_VERSION = [0-9]*;/CURRENT_PROJECT_VERSION = ${BUILD};/g" ios/App/App.xcodeproj/project.pbxproj
+      - name: Certificado e perfil App Store
+        script: |
+          set -euo pipefail
+          if [ -z "${CERTIFICATE_PRIVATE_KEY:-}" ]; then
+            echo "Falta CERTIFICATE_PRIVATE_KEY no grupo app_store_credentials"
+            exit 1
+          fi
+          keychain initialize
+          app-store-connect fetch-signing-files "$BUNDLE_ID" \
+            --type IOS_APP_STORE \
+            --create \
+            --certificate-key=@env:CERTIFICATE_PRIVATE_KEY
+          keychain add-certificates
+          xcode-project use-profiles
+          PROFILE_COUNT=$(find \
+            "$HOME/Library/Developer/Xcode/UserData/Provisioning Profiles" \
+            "$HOME/Library/MobileDevice/Provisioning Profiles" \
+            -name '*.mobileprovision' 2>/dev/null | wc -l | tr -d ' ')
+          if [ "${PROFILE_COUNT:-0}" -lt 1 ]; then
+            echo "Nenhum perfil de provisionamento foi baixado"
+            exit 1
+          fi
+      - name: Gerar IPA
+        script: |
+          xcode-project build-ipa --project "$XCODE_PROJECT" --scheme "$XCODE_SCHEME"
+      - name: Ficha da App Store
+        script: |
+          set +e
+          node scripts/app-store-prepare.mjs
+          echo "Ficha da App Store: exit $?"
+    artifacts:
+      - build/ios/ipa/*.ipa
+    publishing:
+      app_store_connect:
+        api_key: $APP_STORE_CONNECT_PRIVATE_KEY
+        key_id: $APP_STORE_CONNECT_KEY_IDENTIFIER
+        issuer_id: $APP_STORE_CONNECT_ISSUER_ID
+        submit_to_testflight: true
+        expire_build_submitted_for_review: true
+        submit_to_app_store: false
