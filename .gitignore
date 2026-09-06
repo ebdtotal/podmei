@@ -30,3 +30,6 @@ nc[0-9].txt
 new-assets.zip
 *.zip
 !package-lock.json
+
+ios_distribution_private_key
+ios_distribution_private_key.pub

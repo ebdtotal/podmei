@@ -132,7 +132,6 @@ if (!loc) {
           keywords: "mei,das,dasn,contabilidade,faturamento,recibo,contador",
           supportUrl: "https://podmei.com",
           marketingUrl: "https://podmei.com",
-          whatsNew: "Primeira versão pública: controle MEI, DAS, DASN, recibos e planos Pro/Contador.",
         },
       },
     }),
@@ -169,7 +168,6 @@ try {
   const attrs = {
     contactFirstName: process.env.ASC_CONTACT_FIRST || "PODMEI",
     contactLastName: process.env.ASC_CONTACT_LAST || "Suporte",
-    contactPhone: process.env.ASC_CONTACT_PHONE || "+5500000000000",
     contactEmail: process.env.ASC_CONTACT_EMAIL || "suporte@podmei.com",
     demoAccountName: process.env.ASC_DEMO_USER || "",
     demoAccountPassword: process.env.ASC_DEMO_PASS || "",
@@ -177,6 +175,9 @@ try {
     notes:
       "App de gestão financeira para MEI. A API vive em https://podmei.com. Criptografia apenas HTTPS. Assinatura cobrada fora do app (Mercado Pago no site). Sem IAP. Exclusão de conta em Empresa → Excluir minha conta.",
   };
+  if (process.env.ASC_CONTACT_PHONE) {
+    attrs.contactPhone = process.env.ASC_CONTACT_PHONE;
+  }
   if (detailId) {
     await api(`/appStoreReviewDetails/${detailId}`, {
       method: "PATCH",
