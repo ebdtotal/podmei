@@ -1,0 +1,65 @@
+<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/png" href="/pod-mei-icon.png" />
+    <link rel="apple-touch-icon" href="/pod-mei-icon.png" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <meta name="theme-color" content="#7b2cf5" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta
+      name="description"
+      content="POD MEI: o poder de cuidar do seu negócio. Controle de receitas, DAS, DASN, folha e limite de faturamento."
+    />
+    <title>POD MEI — O poder de cuidar do seu negócio</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Poppins:ital,wght@0,400;0,500;0,600;0,700;1,400&display=swap"
+      rel="stylesheet"
+    />
+    <style>
+      html,
+      body {
+        margin: 0;
+        min-height: 100%;
+        background: #f3f4f6;
+        color: #0f172a;
+        font-family: Poppins, ui-sans-serif, system-ui, sans-serif;
+      }
+      #root:empty::before {
+        content: "Carregando PODMEI…";
+        display: block;
+        padding: 2.5rem 1.5rem;
+        color: #334155;
+      }
+    </style>
+    <script>
+      try {
+        if (localStorage.getItem("pod-mei-theme") === "dark") {
+          document.documentElement.classList.add("dark");
+        }
+      } catch (e) {}
+      window.addEventListener("error", function () {
+        var root = document.getElementById("root");
+        if (!root || root.childElementCount) return;
+        root.innerHTML =
+          '<p style="padding:2.5rem 1.5rem;color:#334155">Não foi possível abrir o PODMEI. Atualize com Ctrl+F5 ou <a href="/">volte ao início</a>.</p>';
+      });
+      setTimeout(function () {
+        var root = document.getElementById("root");
+        if (!root || root.childElementCount) return;
+        root.innerHTML =
+          '<p style="padding:2.5rem 1.5rem;color:#334155">O PODMEI não carregou. Atualize com Ctrl+F5 ou <a href="/entrar">entre por aqui</a>.</p>';
+      }, 8000);
+    </script>
+    <script type="module" crossorigin src="/assets/index-BwLjeiDs.js"></script>
+    <link rel="stylesheet" crossorigin href="/assets/index-hzfBaHmS.css">
+  </head>
+  <body>
+    <div id="root"></div>
+    <noscript>Ative o JavaScript para usar o PODMEI.</noscript>
+  </body>
+</html>
