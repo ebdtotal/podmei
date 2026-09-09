@@ -84,7 +84,7 @@ export function FolhaPage() {
         <div className="flex flex-wrap gap-2">
           <button type="button" className="btn-ghost gap-2" onClick={() => void printOrSharePdf("holerite.pdf")}>
             <Printer className="size-4" />
-            Imprimir holerite
+            PDF A4 holerite
           </button>
           <a href={GOV_LINKS.esocialFolha} target="_blank" rel="noreferrer" className="btn-primary gap-2">
             Abrir eSocial MEI

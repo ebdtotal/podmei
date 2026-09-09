@@ -119,7 +119,7 @@ export function DasPage() {
         <div className="flex flex-wrap gap-2">
           <button className="btn-ghost gap-2" onClick={() => void printOrSharePdf("das-conferencia.pdf")}>
             <Printer className="size-4" />
-            Imprimir conferência
+            PDF A4 conferência
           </button>
           <a href={GOV_LINKS.das} target="_blank" rel="noreferrer" className="btn-primary gap-2">
             Emitir no PGMEI

@@ -38,7 +38,7 @@ export function DasnPage() {
           />
           <button type="button" className="btn-ghost gap-2" onClick={() => void printOrSharePdf("dasn.pdf")}>
             <Printer className="size-4" />
-            Imprimir planilha
+            PDF A4 planilha
           </button>
           <a href={GOV_LINKS.dasn} target="_blank" rel="noreferrer" className="btn-primary gap-2">
             Transmitir no DASN-SIMEI

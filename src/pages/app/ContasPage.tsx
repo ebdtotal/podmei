@@ -34,7 +34,7 @@ export function ContasPage() {
         </div>
         <button type="button" className="btn-primary gap-2" onClick={() => void printOrSharePdf("contas.pdf")}>
           <Printer className="size-4" />
-          Imprimir
+          Gerar PDF A4
         </button>
       </div>
       <div className="grid gap-4 md:grid-cols-2">

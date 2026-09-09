@@ -39,7 +39,7 @@ export function RelatorioOficialPage() {
             onChange={(e) => setYear(Number(e.target.value))}
           />
           <button className="btn-primary" onClick={() => void printOrSharePdf("relatorio-oficial.pdf")}>
-            Imprimir / PDF
+            Gerar PDF A4
           </button>
         </div>
       </div>
