@@ -35,6 +35,7 @@ export function emptyWorkspaceFromUser(user: SessionUser): Workspace {
     },
     clients: [client],
     activeClientId: client.id,
+    updatedAt: new Date().toISOString(),
   };
 }
 

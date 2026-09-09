@@ -528,7 +528,10 @@ function podmei_log_email(string $to, string $subject, bool $ok, string $error =
   ]);
 }
 
-/** Grava a área do cliente (empresa, logo, lançamentos…) sem reescrever o banco inteiro. */
+/** Grava a área do cliente (empresa, logo, lançamentos…) sem reescrever o banco inteiro.
+ * Last-write-wins por updatedAt do cliente: rejeita snapshot mais antigo que o já gravado.
+ * @return array{updatedAt: string, accepted: bool}
+ */
 function podmei_upsert_workspace(
   string $userId,
   string $nome,
@@ -536,13 +539,31 @@ function podmei_upsert_workspace(
   string $plan,
   $workspace,
   ?string $updatedAt = null
-): string {
-  $at = $updatedAt ?: gmdate("Y-m-d\\TH:i:s\\Z");
+): array {
+  $clientAt = null;
+  if (is_array($workspace) && !empty($workspace["updatedAt"]) && is_string($workspace["updatedAt"])) {
+    $clientAt = $workspace["updatedAt"];
+  }
+  $at = $updatedAt ?: ($clientAt ?: gmdate("Y-m-d\\TH:i:s\\Z"));
   $json = json_encode($workspace ?? new stdClass(), JSON_UNESCAPED_UNICODE);
   if ($json === false) {
     throw new RuntimeException("Workspace inválido para JSON.");
   }
   $pdo = podmei_db();
+
+  $st = $pdo->prepare("SELECT updated_at, workspace_json FROM workspaces WHERE user_id = ? LIMIT 1");
+  $st->execute([$userId]);
+  $existing = $st->fetch();
+  if ($existing) {
+    $existingAt = (string) ($existing["updated_at"] ?? "");
+    $incomingTs = strtotime($at) ?: 0;
+    $existingTs = strtotime($existingAt) ?: 0;
+    // Se o servidor já tem versão mais nova, mantém a atual (evita celular lento sobrescrever web).
+    if ($existingTs > 0 && $incomingTs > 0 && $incomingTs < $existingTs) {
+      return ["updatedAt" => $existingAt, "accepted" => false];
+    }
+  }
+
   $pdo->prepare(
     "INSERT INTO workspaces (user_id,nome,email,plan,updated_at,workspace_json) VALUES (?,?,?,?,?,?)
      ON CONFLICT(user_id) DO UPDATE SET
@@ -552,7 +573,7 @@ function podmei_upsert_workspace(
        updated_at = excluded.updated_at,
        workspace_json = excluded.workspace_json"
   )->execute([$userId, $nome, $email, $plan, $at, $json]);
-  return $at;
+  return ["updatedAt" => $at, "accepted" => true];
 }
 
 /** Lê o snapshot da área do cliente no SQLite. */

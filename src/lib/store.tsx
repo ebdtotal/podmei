@@ -84,7 +84,7 @@ function defaultWorkspace(): Workspace {
 /** Workspace limpo para contas reais (nunca demo Amanda/João). */
 export function emptyWorkspace(plan: PlanKey = "pro"): Workspace {
   const client = createMeiClient({ plan });
-  return {
+  return stampWorkspace({
     accountant: {
       nome: "",
       crc: "",
@@ -94,7 +94,7 @@ export function emptyWorkspace(plan: PlanKey = "pro"): Workspace {
     },
     clients: [client],
     activeClientId: client.id,
-  };
+  });
 }
 
 function isWorkspace(data: unknown): data is Workspace {
@@ -186,16 +186,29 @@ function loadWorkspace(): Workspace {
   return loadWorkspaceFor(activeUserId);
 }
 
-function persist(state: Workspace) {
+type PersistOptions = {
+  /** Atualiza updatedAt (padrão: true). Hidratação da nuvem deve usar false. */
+  stamp?: boolean;
+  /** Emite evento para sync na nuvem (padrão: true). */
+  emitSync?: boolean;
+};
+
+function persist(state: Workspace, options: PersistOptions = {}) {
+  const stamp = options.stamp !== false;
+  const emitSync = options.emitSync !== false;
   try {
-    const next = stampWorkspace(state);
+    const next = stamp ? stampWorkspace(state) : state;
     const json = JSON.stringify(next);
     localStorage.setItem(storageKeyFor(activeUserId), json);
     // Não espelhar dados de um usuário no storage genérico (evita vazar Amanda p/ outra conta).
     if (!activeUserId) localStorage.setItem(STORAGE_KEY, json);
-    window.dispatchEvent(new CustomEvent("podmei-workspace", { detail: next }));
+    if (emitSync) {
+      window.dispatchEvent(new CustomEvent("podmei-workspace", { detail: next }));
+    }
+    return next;
   } catch {
     /* quota or private mode: keep the session in memory */
+    return state;
   }
 }
 
@@ -250,7 +263,7 @@ interface StoreValue {
   exportBackup: () => void;
   exportWorkspace: () => void;
   importBackup: (data: unknown) => void;
-  replaceWorkspace: (workspace: Workspace) => void;
+  replaceWorkspace: (workspace: Workspace, options?: PersistOptions) => void;
 }
 
 const StoreContext = createContext<StoreValue | null>(null);
@@ -262,8 +275,9 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     const commit = (updater: (prev: Workspace) => Workspace) => {
       setState((prev) => {
         const next = updater(prev);
-        persist(next);
-        return next;
+        // Persist devolve o snapshot com updatedAt — React deve usar o mesmo
+        // valor que vai para a nuvem (senão o LWW do servidor rejeita).
+        return persist(next);
       });
     };
     const active = activeOf(state);
@@ -463,7 +477,12 @@ export function StoreProvider({ children }: { children: ReactNode }) {
           /* ignora erro de importação, mantém workspace atual */
         }
       },
-      replaceWorkspace: (workspace) => commit(() => workspace),
+      replaceWorkspace: (workspace, options) => {
+        setState(() => {
+          const next = persist(workspace, options) ?? workspace;
+          return next;
+        });
+      },
     };
   }, [state]);
 

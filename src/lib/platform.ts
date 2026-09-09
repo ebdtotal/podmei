@@ -558,7 +558,7 @@ export const platform = {
 
   async syncWorkspace(workspace: Workspace) {
     const session = readLocalSession();
-    if (!session) return;
+    if (!session) return { accepted: false as const, updatedAt: workspace.updatedAt };
     if (await backend()) {
       try {
         const res = await fetch(apiBase("/api/sync-workspace.php"), {
@@ -572,8 +572,18 @@ export const platform = {
           },
           body: JSON.stringify({ workspace }),
         });
-        const data = parseJsonPayload<{ ok?: boolean; error?: string }>(await res.text(), res.status);
-        if (res.ok) return;
+        const data = parseJsonPayload<{
+          ok?: boolean;
+          accepted?: boolean;
+          updatedAt?: string;
+          error?: string;
+        }>(await res.text(), res.status);
+        if (res.ok) {
+          return {
+            accepted: data.accepted !== false,
+            updatedAt: data.updatedAt ?? workspace.updatedAt,
+          };
+        }
         if (data.error) throw new Error(data.error);
         throw new Error(`Erro ${res.status} ao salvar na nuvem.`);
       } catch (err) {
@@ -581,11 +591,19 @@ export const platform = {
           // endpoint dedicado falhou com erro claro — tenta index.php
           if (!/Erro \d+|Não foi possível|Workspace|Sessão|bloqueada/i.test(err.message)) throw err;
         }
-        await request("sync-workspace", { workspace }, session.token);
-        return;
+        const data = await request<{ ok?: boolean; accepted?: boolean; updatedAt?: string }>(
+          "sync-workspace",
+          { workspace },
+          session.token,
+        );
+        return {
+          accepted: data.accepted !== false,
+          updatedAt: data.updatedAt ?? workspace.updatedAt,
+        };
       }
     }
     await localPlatform.syncWorkspace(session.user.id, workspace);
+    return { accepted: true as const, updatedAt: workspace.updatedAt };
   },
 
   async myWorkspace() {

@@ -65,15 +65,20 @@ if (($user["status"] ?? "ativo") !== "ativo") respond(403, ["error" => "Conta bl
 if (($user["role"] ?? "") === "master") respond(400, ["error" => "Conta master não sincroniza área de cliente."]);
 
 try {
-  $updatedAt = podmei_upsert_workspace(
+  $result = podmei_upsert_workspace(
     (string) $user["id"],
     (string) ($user["nome"] ?? ""),
     (string) ($user["email"] ?? ""),
     (string) ($user["plan"] ?? "pro"),
-    $ws
+    $ws,
+    is_array($ws) && !empty($ws["updatedAt"]) ? (string) $ws["updatedAt"] : null
   );
 } catch (Throwable $e) {
   respond(500, ["error" => "Não foi possível gravar os dados na nuvem."]);
 }
 
-respond(200, ["ok" => true, "updatedAt" => $updatedAt]);
+respond(200, [
+  "ok" => true,
+  "accepted" => (bool) ($result["accepted"] ?? true),
+  "updatedAt" => (string) ($result["updatedAt"] ?? ""),
+]);

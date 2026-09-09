@@ -3,11 +3,11 @@ import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { Logo } from "@/components/brand/Logo";
 import { emptyWorkspaceFromUser, useAuth } from "@/lib/auth";
 import { platform } from "@/lib/platform";
-import { useStore } from "@/lib/store";
+import { bindStoreUser, useStore } from "@/lib/store";
 
 export function LoginPage() {
   const { login } = useAuth();
-  const { replaceWorkspace, importBackup } = useStore();
+  const { replaceWorkspace } = useStore();
   const navigate = useNavigate();
   const [params] = useSearchParams();
   const [username, setUsername] = useState("");
@@ -25,12 +25,24 @@ export function LoginPage() {
     try {
       const user = await login(username.trim(), password);
       if (user.role !== "master") {
+        // Liga a chave localStorage do usuário ANTES de gravar o snapshot,
+        // senão o login escreve no storage genérico e o Bridge sobrescreve.
+        bindStoreUser(user.id);
         try {
           const remote = await platform.myWorkspace();
-          if (remote.snapshot?.workspace) importBackup(remote.snapshot.workspace);
-          else replaceWorkspace(emptyWorkspaceFromUser(remote.onboarding ?? user));
+          if (remote.snapshot?.workspace) {
+            replaceWorkspace(remote.snapshot.workspace as Parameters<typeof replaceWorkspace>[0], {
+              stamp: false,
+              emitSync: false,
+            });
+          } else {
+            replaceWorkspace(emptyWorkspaceFromUser(remote.onboarding ?? user), {
+              stamp: false,
+              emitSync: false,
+            });
+          }
         } catch {
-          replaceWorkspace(emptyWorkspaceFromUser(user));
+          replaceWorkspace(emptyWorkspaceFromUser(user), { stamp: false, emitSync: false });
         }
       }
       const next = params.get("next");

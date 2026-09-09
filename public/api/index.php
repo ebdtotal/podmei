@@ -780,17 +780,22 @@ if ($action === "sync-workspace") {
   $ws = $in["workspace"] ?? null;
   if (!$ws || !is_array($ws)) respond(400, ["error" => "Workspace ausente."]);
   try {
-    $updatedAt = podmei_upsert_workspace(
+    $result = podmei_upsert_workspace(
       (string) $u["id"],
       (string) ($u["nome"] ?? ""),
       (string) ($u["email"] ?? ""),
       (string) ($u["plan"] ?? "pro"),
-      $ws
+      $ws,
+      is_array($ws) && !empty($ws["updatedAt"]) ? (string) $ws["updatedAt"] : null
     );
   } catch (Throwable $e) {
     respond(500, ["error" => "Não foi possível gravar os dados na nuvem."]);
   }
-  respond(200, ["ok" => true, "updatedAt" => $updatedAt]);
+  respond(200, [
+    "ok" => true,
+    "accepted" => (bool) ($result["accepted"] ?? true),
+    "updatedAt" => (string) ($result["updatedAt"] ?? ""),
+  ]);
 }
 
 $fp = store_open_lock($storeFile, 8);

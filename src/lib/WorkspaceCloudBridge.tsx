@@ -74,8 +74,8 @@ export function WorkspaceCloudBridge() {
     bindStoreUser(userId);
     let cancelled = false;
 
-    const hydrate = async () => {
-      if (lastHydrated.current === userId) return;
+    const hydrate = async (force = false) => {
+      if (!force && lastHydrated.current === userId) return;
       emitSyncStatus("syncing", "Carregando dados da nuvem…");
 
       let local = loadWorkspaceFor(userId);
@@ -101,7 +101,7 @@ export function WorkspaceCloudBridge() {
         } else if (remoteWs && ts(remoteWs) > ts(local)) {
           chosen = remoteWs;
           push = false;
-        } else if (hasRealData(local) && ts(local) >= ts(remoteWs)) {
+        } else if (hasRealData(local) && ts(local) > ts(remoteWs)) {
           chosen = local;
           push = true;
         } else if (remoteWs && hasRealData(remoteWs)) {
@@ -116,7 +116,8 @@ export function WorkspaceCloudBridge() {
         }
 
         if (cancelled) return;
-        methods.current.replaceWorkspace(chosen);
+        // Hidratação silenciosa: não re-estampa nem dispara sync via evento.
+        methods.current.replaceWorkspace(chosen, { stamp: false, emitSync: false });
         if (push) await platform.syncWorkspace(chosen);
         lastHydrated.current = userId;
         emitSyncStatus(
@@ -129,15 +130,46 @@ export function WorkspaceCloudBridge() {
         );
       } catch {
         if (cancelled) return;
-        methods.current.replaceWorkspace(local);
+        methods.current.replaceWorkspace(local, { stamp: false, emitSync: false });
         lastHydrated.current = userId;
         emitSyncStatus("error", "Sem conexão com a nuvem. Usando cópia deste navegador.");
       }
     };
 
-    void hydrate();
+    void hydrate(false);
+
+    /** Ao voltar ao app/aba, puxa a nuvem se houver versão mais nova (app ↔ site). */
+    const pullIfNewer = async () => {
+      if (cancelled || syncing.current || pending.current) return;
+      try {
+        const remote = await platform.myWorkspace();
+        if (cancelled) return;
+        const remoteRaw = remote.snapshot?.workspace as Workspace | undefined;
+        if (!remoteRaw || isDemoWorkspace(remoteRaw)) return;
+        const local = loadWorkspaceFor(userId);
+        if (ts(remoteRaw) > ts(local)) {
+          methods.current.replaceWorkspace(remoteRaw, { stamp: false, emitSync: false });
+          emitSyncStatus("ok", "Dados atualizados da nuvem.");
+        }
+      } catch {
+        /* offline — ignora */
+      }
+    };
+
+    const onVisible = () => {
+      if (document.visibilityState === "visible") void pullIfNewer();
+    };
+    const onFocus = () => {
+      void pullIfNewer();
+    };
+
+    document.addEventListener("visibilitychange", onVisible);
+    window.addEventListener("focus", onFocus);
+
     return () => {
       cancelled = true;
+      document.removeEventListener("visibilitychange", onVisible);
+      window.removeEventListener("focus", onFocus);
     };
   }, [user]);
 
@@ -151,13 +183,34 @@ export function WorkspaceCloudBridge() {
         pending.current = null;
         return;
       }
+      // Mantém a referência até sucesso — se falhar, re-enfileira.
+      const snapshot = ws;
       pending.current = null;
       syncing.current = true;
       emitSyncStatus("syncing", "Salvando na nuvem…");
       let lastError: unknown;
       for (let attempt = 0; attempt < 3; attempt++) {
         try {
-          await platform.syncWorkspace(ws);
+          const result = await platform.syncWorkspace(snapshot);
+          if (result && result.accepted === false) {
+            // Servidor tinha versão mais nova — puxa a nuvem para não achar que salvou.
+            try {
+              const remote = await platform.myWorkspace();
+              const remoteWs = remote.snapshot?.workspace as Workspace | undefined;
+              if (remoteWs && !isDemoWorkspace(remoteWs)) {
+                methods.current.replaceWorkspace(remoteWs, { stamp: false, emitSync: false });
+              }
+            } catch {
+              /* ignore */
+            }
+            emitSyncStatus(
+              "error",
+              "Há uma versão mais nova na nuvem. Atualizamos a tela — refaça a alteração se ainda precisar.",
+            );
+            syncing.current = false;
+            if (pending.current) void flush();
+            return;
+          }
           emitSyncStatus("ok", "Alterações salvas na nuvem.");
           syncing.current = false;
           if (pending.current) void flush();
@@ -167,10 +220,16 @@ export function WorkspaceCloudBridge() {
           await new Promise((r) => window.setTimeout(r, 400 * (attempt + 1)));
         }
       }
+      // Re-enfileira o que falhou, sem sobrescrever edição mais nova já pendente.
+      if (!pending.current || ts(snapshot) >= ts(pending.current)) {
+        pending.current = snapshot;
+      }
       syncing.current = false;
       emitSyncStatus(
         "error",
-        lastError instanceof Error ? lastError.message : "Falha ao salvar na nuvem.",
+        lastError instanceof Error
+          ? `${lastError.message} Tentaremos de novo ao voltar online.`
+          : "Falha ao salvar na nuvem. Tentaremos de novo ao voltar online.",
       );
     };
 
@@ -189,15 +248,22 @@ export function WorkspaceCloudBridge() {
 
     const onVisibility = () => {
       if (document.visibilityState === "hidden") onHide();
+      if (document.visibilityState === "visible" && pending.current) void flush();
+    };
+
+    const onOnline = () => {
+      if (pending.current) void flush();
     };
 
     window.addEventListener("podmei-workspace", onChange);
     window.addEventListener("pagehide", onHide);
+    window.addEventListener("online", onOnline);
     document.addEventListener("visibilitychange", onVisibility);
 
     return () => {
       window.removeEventListener("podmei-workspace", onChange);
       window.removeEventListener("pagehide", onHide);
+      window.removeEventListener("online", onOnline);
       document.removeEventListener("visibilitychange", onVisibility);
       window.clearTimeout(timer.current);
       void flush();
