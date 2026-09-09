@@ -3,7 +3,7 @@ import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { Logo } from "@/components/brand/Logo";
 import { emptyWorkspaceFromUser, useAuth } from "@/lib/auth";
 import { platform } from "@/lib/platform";
-import { bindStoreUser, useStore } from "@/lib/store";
+import { bindStoreUser, adoptSharedWorkspaceForUser, useStore } from "@/lib/store";
 
 export function LoginPage() {
   const { login } = useAuth();
@@ -24,26 +24,25 @@ export function LoginPage() {
     setNotice("");
     try {
       const user = await login(username.trim(), password);
-      if (user.role !== "master") {
-        // Liga a chave localStorage do usuário ANTES de gravar o snapshot,
-        // senão o login escreve no storage genérico e o Bridge sobrescreve.
-        bindStoreUser(user.id);
-        try {
-          const remote = await platform.myWorkspace();
-          if (remote.snapshot?.workspace) {
-            replaceWorkspace(remote.snapshot.workspace as Parameters<typeof replaceWorkspace>[0], {
-              stamp: false,
-              emitSync: false,
-            });
-          } else {
-            replaceWorkspace(emptyWorkspaceFromUser(remote.onboarding ?? user), {
-              stamp: false,
-              emitSync: false,
-            });
-          }
-        } catch {
-          replaceWorkspace(emptyWorkspaceFromUser(user), { stamp: false, emitSync: false });
+      // Liga a chave localStorage do usuário ANTES de gravar o snapshot,
+      // senão o login escreve no storage genérico e o Bridge sobrescreve.
+      bindStoreUser(user.id);
+      if (user.role === "master") adoptSharedWorkspaceForUser(user.id);
+      try {
+        const remote = await platform.myWorkspace();
+        if (remote.snapshot?.workspace) {
+          replaceWorkspace(remote.snapshot.workspace as Parameters<typeof replaceWorkspace>[0], {
+            stamp: false,
+            emitSync: false,
+          });
+        } else {
+          replaceWorkspace(emptyWorkspaceFromUser(remote.onboarding ?? user), {
+            stamp: false,
+            emitSync: false,
+          });
         }
+      } catch {
+        replaceWorkspace(emptyWorkspaceFromUser(user), { stamp: false, emitSync: false });
       }
       const next = params.get("next");
       const safeNext = next && next.startsWith("/") && !next.startsWith("//") ? next : "";

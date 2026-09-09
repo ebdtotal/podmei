@@ -1,11 +1,21 @@
 import { useEffect, useState, type FormEvent } from "react";
+import { Link } from "react-router-dom";
 import { companyTypeLabel, MEI_FATURAMENTO } from "@/lib/mei";
 import { dasPerfilFromTipo, dasPerfilLabel } from "@/lib/das";
 import { useAuth } from "@/lib/auth";
+import { plans } from "@/lib/plans";
 import { platform } from "@/lib/platform";
+import type { Subscription } from "@/lib/platform-types";
 import { useStore } from "@/lib/store";
 import type { Company, CompanyType, DasPerfil } from "@/lib/types";
 import { formatMoney } from "@/lib/utils";
+
+const statusLabel: Record<string, string> = {
+  ativa: "Ativa (recorrente)",
+  atrasada: "Em atraso",
+  cancelada: "Cancelada",
+  pendente: "Pendente",
+};
 
 export function EmpresaPage() {
   const { company, setCompany, exportBackup, importBackup } = useStore();
@@ -23,10 +33,19 @@ export function EmpresaPage() {
   const [passwordBusy, setPasswordBusy] = useState(false);
   const [deleteBusy, setDeleteBusy] = useState(false);
   const [deleteError, setDeleteError] = useState("");
+  const [sub, setSub] = useState<Subscription | null>(null);
+  const [subBusy, setSubBusy] = useState(false);
+  const [subMsg, setSubMsg] = useState("");
+  const [subErr, setSubErr] = useState("");
 
   useEffect(() => {
     setForm(company);
   }, [company]);
+
+  useEffect(() => {
+    if (!user || user.role === "master") return;
+    void platform.mySubscription().then(setSub).catch(() => setSub(null));
+  }, [user]);
 
   useEffect(() => {
     const onStatus = (event: Event) => {
@@ -75,6 +94,28 @@ export function EmpresaPage() {
       setPasswordError(err instanceof Error ? err.message : "Não foi possível salvar a senha.");
     } finally {
       setPasswordBusy(false);
+    }
+  }
+
+  async function onCancelSubscription() {
+    if (!confirm("Cancelar a cobrança automática no Mercado Pago? O acesso será bloqueado após o cancelamento.")) {
+      return;
+    }
+    setSubBusy(true);
+    setSubErr("");
+    setSubMsg("");
+    try {
+      const next = await platform.cancelMySubscription();
+      setSub(next);
+      setSubMsg("Assinatura cancelada. A cobrança recorrente foi interrompida.");
+      window.setTimeout(() => {
+        logout();
+        window.location.href = "/entrar";
+      }, 1800);
+    } catch (e) {
+      setSubErr(e instanceof Error ? e.message : "Não foi possível cancelar.");
+    } finally {
+      setSubBusy(false);
     }
   }
 
@@ -300,6 +341,49 @@ export function EmpresaPage() {
         Salvar cadastro
       </button>
       {saved ? <p className="text-sm text-green">Cadastro atualizado.</p> : null}
+
+      {user && user.role !== "master" ? (
+        <section className="rounded-2xl border border-line bg-paper p-5">
+          <h2 className="text-sm font-semibold">Assinatura</h2>
+          {sub ? (
+            <div className="mt-3 space-y-2 text-sm">
+              <p>
+                Plano: <strong>{plans[sub.plan]?.name ?? sub.plan}</strong> — {formatMoney(sub.amount)}/
+                {sub.cycle === "year" ? "ano" : "mês"}
+              </p>
+              <p>
+                Status: <strong>{statusLabel[sub.status] ?? sub.status}</strong>
+                {sub.recurring || sub.mpPreapprovalId ? " · renovação automática" : ""}
+              </p>
+              {sub.nextDue ? <p className="text-mute">Próximo vencimento: {sub.nextDue}</p> : null}
+              <div className="mt-3 flex flex-wrap gap-2">
+                {sub.status !== "cancelada" ? (
+                  <button
+                    type="button"
+                    className="btn-ghost"
+                    disabled={subBusy}
+                    onClick={() => void onCancelSubscription()}
+                  >
+                    {subBusy ? "Cancelando…" : "Cancelar assinatura"}
+                  </button>
+                ) : null}
+                <Link to={`/assinar/${sub.plan === "contador" ? "contador" : "pro"}`} className="btn-ghost">
+                  Trocar / renovar plano
+                </Link>
+              </div>
+            </div>
+          ) : (
+            <div className="mt-3 space-y-2 text-sm">
+              <p className="text-mute">Nenhuma assinatura ativa encontrada nesta conta.</p>
+              <Link to="/assinar/pro" className="btn-ghost inline-flex">
+                Ver planos no site
+              </Link>
+            </div>
+          )}
+          {subMsg ? <p className="mt-2 text-sm text-green-700">{subMsg}</p> : null}
+          {subErr ? <p className="mt-2 text-sm text-red">{subErr}</p> : null}
+        </section>
+      ) : null}
 
       {user && user.role !== "master" ? (
         <section className="rounded-2xl border border-line bg-paper p-5">

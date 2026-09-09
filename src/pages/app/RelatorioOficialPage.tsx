@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
 import { BackToReports } from "@/components/layout/BackToReports";
 import { monthEntries, officialRevenueRows } from "@/lib/mei";
+import { printOrSharePdf } from "@/lib/print";
 import { useStore } from "@/lib/store";
 import { MONTHS } from "@/lib/types";
 import { currentYear, formatMoney } from "@/lib/utils";
@@ -37,7 +38,7 @@ export function RelatorioOficialPage() {
             value={year}
             onChange={(e) => setYear(Number(e.target.value))}
           />
-          <button className="btn-primary" onClick={() => window.print()}>
+          <button className="btn-primary" onClick={() => void printOrSharePdf("relatorio-oficial.pdf")}>
             Imprimir / PDF
           </button>
         </div>

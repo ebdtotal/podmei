@@ -775,7 +775,6 @@ if ($action === "sync-workspace") {
   $store = load_store_readonly($storeFile, $config);
   $i = auth_user($config, $store);
   $u = $store["users"][$i];
-  if (($u["role"] ?? "") === "master") respond(400, ["error" => "Conta master não sincroniza área de cliente."]);
   $in = json_input();
   $ws = $in["workspace"] ?? null;
   if (!$ws || !is_array($ws)) respond(400, ["error" => "Workspace ausente."]);

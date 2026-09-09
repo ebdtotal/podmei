@@ -2,6 +2,7 @@ import { useEffect, useRef } from "react";
 import { emptyWorkspaceFromUser, useAuth } from "./auth";
 import { platform } from "./platform";
 import {
+  adoptSharedWorkspaceForUser,
   bindStoreUser,
   emptyWorkspace,
   isDemoWorkspace,
@@ -64,7 +65,7 @@ export function WorkspaceCloudBridge() {
   const syncing = useRef(false);
 
   useEffect(() => {
-    if (!user || user.role === "master") {
+    if (!user) {
       bindStoreUser(null);
       lastHydrated.current = null;
       return;
@@ -72,6 +73,7 @@ export function WorkspaceCloudBridge() {
 
     const userId = user.id;
     bindStoreUser(userId);
+    if (user.role === "master") adoptSharedWorkspaceForUser(userId);
     let cancelled = false;
 
     const hydrate = async (force = false) => {
@@ -80,7 +82,7 @@ export function WorkspaceCloudBridge() {
 
       let local = loadWorkspaceFor(userId);
       if (isDemoWorkspace(local)) {
-        local = emptyWorkspace(user.plan === "contador" ? "contador" : "pro");
+        local = emptyWorkspace(user.plan === "contador" || user.role === "master" ? "contador" : "pro");
       }
 
       try {
@@ -174,7 +176,7 @@ export function WorkspaceCloudBridge() {
   }, [user]);
 
   useEffect(() => {
-    if (!user || user.role === "master") return;
+    if (!user) return;
 
     const flush = async () => {
       const ws = pending.current;

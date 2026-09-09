@@ -1,8 +1,9 @@
 import { jsPDF } from "jspdf";
 import type { Company, Entry } from "./types";
 import { formatDate, formatMoney } from "./utils";
+import { saveOrSharePdf } from "./print";
 
-export function downloadReciboPdf(company: Company, entry: Entry) {
+export async function downloadReciboPdf(company: Company, entry: Entry) {
   const doc = new jsPDF({ unit: "mm", format: "a4" });
   const w = 210;
 
@@ -90,5 +91,5 @@ export function downloadReciboPdf(company: Company, entry: Entry) {
   doc.text(company.nome, 120, 250, { maxWidth: 76 });
   doc.text("Assinatura do empresário", 120, 256);
 
-  doc.save(`recibo-${entry.data}-${entry.id}.pdf`);
+  await saveOrSharePdf(doc, `recibo-${entry.data}-${entry.id}.pdf`);
 }

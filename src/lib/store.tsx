@@ -15,6 +15,23 @@ export function bindStoreUser(userId: string | null) {
   activeUserId = userId;
 }
 
+/**
+ * Master usava a chave compartilhada (sem userId). Quando a conta passa a syncar,
+ * copia esse cache para mei-em-ordem-v2:{userId} se a chave por usuário estiver vazia.
+ */
+export function adoptSharedWorkspaceForUser(userId: string) {
+  if (!userId) return;
+  try {
+    const keyed = parseWorkspaceRaw(localStorage.getItem(storageKeyFor(userId)));
+    if (keyed && !isDemoWorkspace(keyed)) return;
+    const shared = parseWorkspaceRaw(localStorage.getItem(STORAGE_KEY));
+    if (!shared || isDemoWorkspace(shared)) return;
+    localStorage.setItem(storageKeyFor(userId), JSON.stringify(shared));
+  } catch {
+    /* ignore */
+  }
+}
+
 function storageKeyFor(userId?: string | null) {
   return userId ? `${STORAGE_KEY}:${userId}` : STORAGE_KEY;
 }

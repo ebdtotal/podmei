@@ -2,6 +2,7 @@ import { Printer } from "lucide-react";
 import { useMemo, useState } from "react";
 import { BackToReports } from "@/components/layout/BackToReports";
 import { livroCaixa } from "@/lib/books";
+import { printOrSharePdf } from "@/lib/print";
 import { useStore } from "@/lib/store";
 import { MONTHS } from "@/lib/types";
 import { currentYear, formatDate, formatMoney } from "@/lib/utils";
@@ -43,7 +44,7 @@ export function LivroCaixaPage() {
             ))}
           </select>
           <input type="number" className="input w-28" value={year} onChange={(e) => setYear(Number(e.target.value))} />
-          <button className="btn-primary gap-2" onClick={() => window.print()}>
+          <button className="btn-primary gap-2" onClick={() => void printOrSharePdf("livro-caixa.pdf")}>
             <Printer className="size-4" />
             Imprimir
           </button>

@@ -17,7 +17,6 @@ import { LancamentosPage } from "./pages/app/LancamentosPage";
 import { LimitesPage } from "./pages/app/LimitesPage";
 import { LivroCaixaPage } from "./pages/app/LivroCaixaPage";
 import { LivroRazaoPage } from "./pages/app/LivroRazaoPage";
-import { PlanosPage } from "./pages/app/PlanosPage";
 import { ProdutosPage } from "./pages/app/ProdutosPage";
 import { RecibosPage } from "./pages/app/RecibosPage";
 import { RelatorioOficialPage } from "./pages/app/RelatorioOficialPage";
@@ -102,7 +101,7 @@ export default function App() {
         <Route path="das" element={<DasPage />} />
         <Route path="dasn" element={<DasnPage />} />
         <Route path="nfse" element={<NfsePage />} />
-        <Route path="planos" element={<PlanosPage />} />
+        <Route path="planos" element={<Navigate to="/app/empresa" replace />} />
       </Route>
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>

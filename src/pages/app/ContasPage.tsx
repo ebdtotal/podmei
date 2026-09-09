@@ -1,5 +1,6 @@
 import { Printer } from "lucide-react";
 import { useMemo } from "react";
+import { printOrSharePdf } from "@/lib/print";
 import { useStore } from "@/lib/store";
 import { cn, formatDate, formatMoney, todayIso } from "@/lib/utils";
 
@@ -31,7 +32,7 @@ export function ContasPage() {
             A data da operação fica no lançamento. Aqui entra a data em que o valor deve ser recebido ou pago.
           </p>
         </div>
-        <button type="button" className="btn-primary gap-2" onClick={() => window.print()}>
+        <button type="button" className="btn-primary gap-2" onClick={() => void printOrSharePdf("contas.pdf")}>
           <Printer className="size-4" />
           Imprimir
         </button>

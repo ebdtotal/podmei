@@ -89,7 +89,7 @@ const faqs = [
   },
   {
     q: "Como funciona a cobrança?",
-    a: "A assinatura é recorrente no Mercado Pago (mensal ou anual) até você cancelar em Planos. O acesso é liberado após a confirmação do pagamento.",
+    a: "A assinatura é recorrente no Mercado Pago (mensal ou anual) até você cancelar em Empresa. O acesso é liberado após a confirmação do pagamento.",
   },
   {
     q: "Qual plano escolher?",

@@ -12,7 +12,6 @@ import {
   Receipt,
   Scale,
   Shield,
-  Wallet,
   BookOpen,
   Users,
   X,
@@ -39,7 +38,6 @@ const links = [
   { to: "/app/folha", label: "Folha", icon: Users, end: false },
   { to: "/app/relatorios", label: "Relatórios", icon: FileText, end: false },
   { to: "/app/limites", label: "Limites", icon: Gauge, end: false },
-  { to: "/app/planos", label: "Planos", icon: Wallet, end: false },
 ];
 
 const reportPaths = [

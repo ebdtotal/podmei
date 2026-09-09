@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
 import { ExternalLink, Printer, UserRound } from "lucide-react";
 import { SALARIO_MINIMO } from "@/lib/das";
+import { printOrSharePdf } from "@/lib/print";
 import {
   buildPayroll,
   calcPayroll,
@@ -81,7 +82,7 @@ export function FolhaPage() {
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
-          <button type="button" className="btn-ghost gap-2" onClick={() => window.print()}>
+          <button type="button" className="btn-ghost gap-2" onClick={() => void printOrSharePdf("holerite.pdf")}>
             <Printer className="size-4" />
             Imprimir holerite
           </button>

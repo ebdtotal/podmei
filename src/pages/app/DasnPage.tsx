@@ -2,6 +2,7 @@ import { ExternalLink, Printer } from "lucide-react";
 import { useMemo, useState } from "react";
 import { BackToReports } from "@/components/layout/BackToReports";
 import { dasnSummary, excessBand, GOV_LINKS, proportionalLimit, totalExpenses, totalRevenue, yearEntries } from "@/lib/mei";
+import { printOrSharePdf } from "@/lib/print";
 import { useStore } from "@/lib/store";
 import { cn, currentYear, formatMoney } from "@/lib/utils";
 
@@ -35,7 +36,7 @@ export function DasnPage() {
             value={year}
             onChange={(e) => setYear(Number(e.target.value))}
           />
-          <button type="button" className="btn-ghost gap-2" onClick={() => window.print()}>
+          <button type="button" className="btn-ghost gap-2" onClick={() => void printOrSharePdf("dasn.pdf")}>
             <Printer className="size-4" />
             Imprimir planilha
           </button>

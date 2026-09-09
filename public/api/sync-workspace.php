@@ -62,7 +62,6 @@ $st->execute([$userId]);
 $user = $st->fetch();
 if (!$user) respond(401, ["error" => "Usuário não encontrado."]);
 if (($user["status"] ?? "ativo") !== "ativo") respond(403, ["error" => "Conta bloqueada."]);
-if (($user["role"] ?? "") === "master") respond(400, ["error" => "Conta master não sincroniza área de cliente."]);
 
 try {
   $result = podmei_upsert_workspace(

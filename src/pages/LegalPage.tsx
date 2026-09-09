@@ -90,7 +90,7 @@ export function TermosPage() {
       <h2 className="pt-2 text-base font-semibold text-ink">Assinatura e pagamento</h2>
       <p>
         A cobrança é recorrente pelo Mercado Pago, conforme o plano escolhido no site. O acesso no aplicativo segue o plano
-        pago. O acesso pode ser suspenso em caso de inadimplência. Você pode cancelar a renovação em Planos.
+        pago. O acesso pode ser suspenso em caso de inadimplência. Você pode cancelar a renovação em Empresa.
       </p>
       <h2 className="pt-2 text-base font-semibold text-ink">Conta e responsabilidade</h2>
       <p>

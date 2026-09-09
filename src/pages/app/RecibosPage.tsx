@@ -53,7 +53,7 @@ export function RecibosPage() {
                 <td>{e.descricao}</td>
                 <td className="font-medium">{formatMoney(e.valor)}</td>
                 <td className="pr-4 text-right">
-                  <button className="btn-primary" onClick={() => downloadReciboPdf(company, e)}>
+                  <button className="btn-primary" onClick={() => void downloadReciboPdf(company, e)}>
                     Gerar PDF
                   </button>
                 </td>

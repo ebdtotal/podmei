@@ -12,6 +12,7 @@ import {
   SALARIO_MINIMO,
 } from "@/lib/das";
 import { GOV_LINKS } from "@/lib/mei";
+import { printOrSharePdf } from "@/lib/print";
 import { useStore } from "@/lib/store";
 import type { DasPerfil, Entry } from "@/lib/types";
 import { MONTHS, MONTHS_SHORT } from "@/lib/types";
@@ -116,7 +117,7 @@ export function DasPage() {
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
-          <button className="btn-ghost gap-2" onClick={() => window.print()}>
+          <button className="btn-ghost gap-2" onClick={() => void printOrSharePdf("das-conferencia.pdf")}>
             <Printer className="size-4" />
             Imprimir conferência
           </button>
