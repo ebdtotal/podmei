@@ -1,7 +1,18 @@
 import { useMemo, useState, type ReactNode } from "react";
-import { Link } from "react-router-dom";
+import { QuickContactModal } from "@/components/entries/QuickContactModal";
+import { QuickProductModal } from "@/components/entries/QuickProductModal";
 import { calcEntryTotal } from "@/lib/entryPricing";
-import type { DiscountKind, Entry, EntryKind, PaymentMethod, PaymentStatus, RevenueKind } from "@/lib/types";
+import type {
+  Contact,
+  DiscountKind,
+  Entry,
+  EntryKind,
+  PaymentMethod,
+  PaymentStatus,
+  Product,
+  ProductKind,
+  RevenueKind,
+} from "@/lib/types";
 import { matchContact, parseLancamento, type ParsedDraft } from "@/lib/parser";
 import { useStore } from "@/lib/store";
 import { formatMoney, todayIso } from "@/lib/utils";
@@ -52,6 +63,8 @@ export function EntryForm({
       descontoValor: base.descontoValor ?? 0,
     };
   });
+  const [contactModalOpen, setContactModalOpen] = useState(false);
+  const [productModalOpen, setProductModalOpen] = useState(false);
   const pending = isPending(draft.status);
   const totals = useMemo(
     () =>
@@ -95,6 +108,25 @@ export function EntryForm({
     });
   }
 
+  function applyProduct(p: Product, keepQty = true) {
+    setDraft((prev) => ({
+      ...prev,
+      productId: p.id,
+      descricao: p.nome,
+      precoUnitario: p.preco,
+      valor: p.preco,
+      quantidade: keepQty && prev.quantidade && prev.quantidade > 0 ? prev.quantidade : 1,
+      revenueKind:
+        prev.kind === "venda"
+          ? p.kind === "servico"
+            ? "servico"
+            : prev.revenueKind === "servico"
+              ? "comercio"
+              : prev.revenueKind
+          : prev.revenueKind,
+    }));
+  }
+
   function pickProduct(productId: string) {
     if (!productId) {
       setDraft({ ...draft, productId: undefined });
@@ -102,27 +134,28 @@ export function EntryForm({
     }
     const p = products.find((x) => x.id === productId);
     if (!p) return;
-    setDraft({
-      ...draft,
-      productId: p.id,
-      descricao: p.nome,
-      precoUnitario: p.preco,
-      valor: p.preco,
-      quantidade: draft.quantidade && draft.quantidade > 0 ? draft.quantidade : 1,
-      revenueKind:
-        draft.kind === "venda"
-          ? p.kind === "servico"
-            ? "servico"
-            : draft.revenueKind === "servico"
-              ? "comercio"
-              : draft.revenueKind
-          : draft.revenueKind,
-    });
+    applyProduct(p);
+  }
+
+  function applyContact(contact: Contact) {
+    setDraft((prev) => ({
+      ...prev,
+      contraparte: contact.nome,
+      contactId: contact.id,
+    }));
+  }
+
+  function resetForm() {
+    setDraft(emptyDraft());
   }
 
   const descontoTipo = draft.descontoTipo || "reais";
+  const defaultContactKind = draft.kind === "venda" ? "cliente" : "fornecedor";
+  const defaultProductKind: ProductKind =
+    draft.kind === "venda" && draft.revenueKind === "servico" ? "servico" : "produto";
 
   return (
+    <>
     <form
       className="grid gap-3 sm:grid-cols-2 md:grid-cols-3"
       onSubmit={(e) => {
@@ -136,6 +169,7 @@ export function EntryForm({
           contactId: linked?.id,
           vencimento: pending ? draft.vencimento || draft.data : undefined,
         });
+        resetForm();
       }}
     >
       <Field label="Data da operação">
@@ -182,9 +216,13 @@ export function EntryForm({
         label="Cliente / fornecedor"
         className="sm:col-span-2 md:col-span-1"
         hint={
-          <Link to="/app/cadastros" className="font-semibold text-navy">
-            Cadastros
-          </Link>
+          <button
+            type="button"
+            className="font-semibold text-navy hover:underline"
+            onClick={() => setContactModalOpen(true)}
+          >
+            Cadastrar
+          </button>
         }
       >
         <input
@@ -216,9 +254,13 @@ export function EntryForm({
         label="Produto / serviço"
         className="sm:col-span-2 md:col-span-1"
         hint={
-          <Link to="/app/produtos" className="font-semibold text-navy">
+          <button
+            type="button"
+            className="font-semibold text-navy hover:underline"
+            onClick={() => setProductModalOpen(true)}
+          >
             Cadastrar
-          </Link>
+          </button>
         }
       >
         <select
@@ -398,6 +440,21 @@ export function EntryForm({
         ) : null}
       </div>
     </form>
+    <QuickContactModal
+      open={contactModalOpen}
+      defaultKind={defaultContactKind}
+      defaultNome={draft.contraparte}
+      onClose={() => setContactModalOpen(false)}
+      onCreated={applyContact}
+    />
+    <QuickProductModal
+      open={productModalOpen}
+      defaultKind={defaultProductKind}
+      defaultNome={draft.descricao}
+      onClose={() => setProductModalOpen(false)}
+      onCreated={(product) => applyProduct(product)}
+    />
+    </>
   );
 }
 
