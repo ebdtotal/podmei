@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { Logo } from "@/components/brand/Logo";
+import { allowsExternalPurchaseUi } from "@/lib/native";
 import { platform } from "@/lib/platform";
 
 const SESSION_KEY = "podmei-assine";
@@ -137,8 +138,15 @@ export function AssinarRetornoPage({ tipo }: { tipo: AssinarRetornoTipo }) {
               Ir para o login
             </Link>
           ) : (
-            <Link to="/assinar/pro" className="btn-primary flex w-full justify-center">
-              {tipo === "falha" ? "Tentar de novo" : "Voltar aos planos"}
+            <Link
+              to={allowsExternalPurchaseUi() ? "/assinar/pro" : "/entrar"}
+              className="btn-primary flex w-full justify-center"
+            >
+              {allowsExternalPurchaseUi()
+                ? tipo === "falha"
+                  ? "Tentar de novo"
+                  : "Voltar aos planos"
+                : "Ir para o login"}
             </Link>
           )}
           <Link to="/" className="block text-center text-sm font-semibold text-ink">

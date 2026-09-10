@@ -1,11 +1,18 @@
 import { useState, type FormEvent } from "react";
 import { Link } from "react-router-dom";
+import { IosPurchaseBlocked } from "@/components/auth/IosPurchaseBlocked";
 import { Logo } from "@/components/brand/Logo";
+import { allowsExternalPurchaseUi } from "@/lib/native";
 import { redirectToMercadoPago } from "@/lib/payment";
 import { platform } from "@/lib/platform";
 import { formatMoney } from "@/lib/utils";
 
 export function TestCheckoutPage() {
+  if (!allowsExternalPurchaseUi()) return <IosPurchaseBlocked />;
+  return <TestCheckoutPageInner />;
+}
+
+function TestCheckoutPageInner() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [form, setForm] = useState({

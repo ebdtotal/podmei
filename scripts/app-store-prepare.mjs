@@ -169,11 +169,12 @@ try {
     contactFirstName: process.env.ASC_CONTACT_FIRST || "PODMEI",
     contactLastName: process.env.ASC_CONTACT_LAST || "Suporte",
     contactEmail: process.env.ASC_CONTACT_EMAIL || "suporte@podmei.com",
-    demoAccountName: process.env.ASC_DEMO_USER || "",
-    demoAccountPassword: process.env.ASC_DEMO_PASS || "",
-    demoAccountRequired: Boolean(process.env.ASC_DEMO_USER),
+    demoAccountName: process.env.ASC_DEMO_USER || "appreview",
+    demoAccountPassword: process.env.ASC_DEMO_PASS || "AppleReview#Podmei26",
+    demoAccountRequired: true,
     notes:
-      "App de gestão financeira para MEI. A API vive em https://podmei.com. Criptografia apenas HTTPS. Assinatura cobrada fora do app (Mercado Pago no site). Sem IAP. Exclusão de conta em Empresa → Excluir minha conta.",
+      process.env.ASC_REVIEW_NOTES ||
+      "App de gestão financeira para MEI. API em https://podmei.com (HTTPS).\n\nDemo account: use o usuário e senha preenchidos neste formulário. Conta Pro com lançamentos, clientes e relatórios pré-carregados.\n\nIMPORTANTE (Guideline 3.1.1): no app iOS NÃO há compra, upgrade nem Mercado Pago. Assinatura só em podmei.com no navegador. Sem IAP.\n\nExclusão de conta: Empresa → Excluir minha conta.",
   };
   if (process.env.ASC_CONTACT_PHONE) {
     attrs.contactPhone = process.env.ASC_CONTACT_PHONE;

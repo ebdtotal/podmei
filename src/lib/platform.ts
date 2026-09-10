@@ -11,6 +11,7 @@ import type {
   Subscription,
   WorkspaceSnapshot,
 } from "./platform-types";
+import { allowsExternalPurchaseUi } from "./native";
 import { clearLocalSession, localPlatform, readLocalSession, SESSION_KEY } from "./platform-local";
 
 const API = "/api/index.php";
@@ -225,6 +226,9 @@ export const platform = {
   },
 
   async checkout(input: CheckoutInput) {
+    if (!allowsExternalPurchaseUi()) {
+      throw new Error("Compra de plano não está disponível neste app iOS. Use podmei.com no navegador.");
+    }
     if (await backend()) {
       const data = await requestCheckout<{
         lead: Lead;

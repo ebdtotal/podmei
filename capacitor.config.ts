@@ -7,7 +7,8 @@ const config: CapacitorConfig = {
   server: {
     androidScheme: "https",
     iosScheme: "https",
-    allowNavigation: ["podmei.com", "www.podmei.com", "www.mercadopago.com.br", "*.mercadopago.com"],
+    // Mercado Pago stays out of the iOS WebView (Guideline 3.1.1 — no external IAP path in-app).
+    allowNavigation: ["podmei.com", "www.podmei.com"],
   },
   ios: {
     contentInset: "automatic",

@@ -1,6 +1,8 @@
 import { useState, type FormEvent } from "react";
 import { Link, useParams } from "react-router-dom";
+import { IosPurchaseBlocked } from "@/components/auth/IosPurchaseBlocked";
 import { Logo } from "@/components/brand/Logo";
+import { allowsExternalPurchaseUi } from "@/lib/native";
 import { redirectToMercadoPago } from "@/lib/payment";
 import { PLAN_KEYS, plans, planPrice } from "@/lib/plans";
 import { platform } from "@/lib/platform";
@@ -8,6 +10,11 @@ import type { BillingCycle, PlanKey } from "@/lib/types";
 import { formatMoney } from "@/lib/utils";
 
 export function CheckoutPage() {
+  if (!allowsExternalPurchaseUi()) return <IosPurchaseBlocked />;
+  return <CheckoutPageInner />;
+}
+
+function CheckoutPageInner() {
   const params = useParams();
   const plan = (PLAN_KEYS.includes(params.plan as PlanKey) ? params.plan : "pro") as PlanKey;
   const pack = plans[plan];

@@ -2,6 +2,7 @@ import { useState, type FormEvent } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { Logo } from "@/components/brand/Logo";
 import { emptyWorkspaceFromUser, useAuth } from "@/lib/auth";
+import { allowsExternalPurchaseUi } from "@/lib/native";
 import { platform } from "@/lib/platform";
 import { bindStoreUser, adoptSharedWorkspaceForUser, useStore } from "@/lib/store";
 
@@ -113,10 +114,16 @@ export function LoginPage() {
           </button>
         </form>
         <p className="mt-6 text-center text-sm text-mute">
-          Ainda não assinou?{" "}
-          <Link to="/assinar/pro" className="font-semibold text-ink">
-            Escolher um plano
-          </Link>
+          {allowsExternalPurchaseUi() ? (
+            <>
+              Ainda não assinou?{" "}
+              <Link to="/assinar/pro" className="font-semibold text-ink">
+                Escolher um plano
+              </Link>
+            </>
+          ) : (
+            <>Assinaturas novas em podmei.com pelo navegador. Neste app, entre com a conta já ativa.</>
+          )}
         </p>
       </div>
     </div>

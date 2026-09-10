@@ -1,7 +1,9 @@
 import { useEffect, useRef, useState } from "react";
 import { Link, useParams, useSearchParams } from "react-router-dom";
 import { Check, Copy, ExternalLink } from "lucide-react";
+import { IosPurchaseBlocked } from "@/components/auth/IosPurchaseBlocked";
 import { Logo } from "@/components/brand/Logo";
+import { allowsExternalPurchaseUi } from "@/lib/native";
 import { mercadoPagoCheckoutUrl, redirectToMercadoPago } from "@/lib/payment";
 import { plans } from "@/lib/plans";
 import { platform } from "@/lib/platform";
@@ -9,6 +11,11 @@ import type { ConfirmPaymentResult, Lead } from "@/lib/platform-types";
 import { formatMoney } from "@/lib/utils";
 
 export function PayPage() {
+  if (!allowsExternalPurchaseUi()) return <IosPurchaseBlocked />;
+  return <PayPageInner />;
+}
+
+function PayPageInner() {
   const { id } = useParams();
   const [params] = useSearchParams();
   const [lead, setLead] = useState<Lead | null>(null);

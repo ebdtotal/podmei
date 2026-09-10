@@ -15,6 +15,7 @@ import {
 } from "lucide-react";
 import { Logo } from "@/components/brand/Logo";
 import { ThemeToggle } from "@/components/brand/ThemeToggle";
+import { allowsExternalPurchaseUi } from "@/lib/native";
 import { PLAN_KEYS, plans } from "@/lib/plans";
 import { cn, formatMoney } from "@/lib/utils";
 
@@ -107,6 +108,7 @@ function ShieldLock({ className, strokeWidth = 1.6 }: { className?: string; stro
 }
 
 export function LandingPage() {
+  const canPurchase = allowsExternalPurchaseUi();
 
   return (
     <div className="bg-bg text-ink">
@@ -119,16 +121,20 @@ export function LandingPage() {
             <a href="#faq">FAQ</a>
           </nav>
           <div className="flex items-center gap-3">
-            <Link to="/assinar/contador" className="hidden text-sm font-semibold text-ink sm:inline">
-              Sou contador
-            </Link>
+            {canPurchase ? (
+              <Link to="/assinar/contador" className="hidden text-sm font-semibold text-ink sm:inline">
+                Sou contador
+              </Link>
+            ) : null}
             <ThemeToggle />
-            <Link to="/entrar" className="btn-ghost hidden sm:inline-flex">
+            <Link to="/entrar" className={canPurchase ? "btn-ghost hidden sm:inline-flex" : "btn-ghost"}>
               Entrar
             </Link>
-            <Link to="/assinar/pro" className="btn-primary">
-              Assinar
-            </Link>
+            {canPurchase ? (
+              <Link to="/assinar/pro" className="btn-primary">
+                Assinar
+              </Link>
+            ) : null}
           </div>
         </div>
       </header>
@@ -155,14 +161,22 @@ export function LandingPage() {
             e a declaração anual — no formato que o fisco espera.
           </p>
           <div className="mt-8 flex flex-wrap gap-3">
-            <Link to="/assinar/pro" className="btn-primary h-12 gap-2 px-5">
-              Assinar PODMEI Pro
-              <ArrowRight className="size-4" />
-            </Link>
-            <Link to="/entrar" className="btn-ghost h-12 px-5">
-              Abrir o sistema
+            {canPurchase ? (
+              <Link to="/assinar/pro" className="btn-primary h-12 gap-2 px-5">
+                Assinar PODMEI Pro
+                <ArrowRight className="size-4" />
+              </Link>
+            ) : null}
+            <Link to="/entrar" className={canPurchase ? "btn-ghost h-12 px-5" : "btn-primary h-12 gap-2 px-5"}>
+              {canPurchase ? "Abrir o sistema" : "Entrar na conta"}
+              {!canPurchase ? <ArrowRight className="size-4" /> : null}
             </Link>
           </div>
+          {!canPurchase ? (
+            <p className="mt-4 max-w-xl text-sm text-mute">
+              Neste app iOS não há compra de plano. Novas assinaturas são feitas em podmei.com pelo navegador.
+            </p>
+          ) : null}
         </div>
         <HeroCard />
       </section>
@@ -207,7 +221,11 @@ export function LandingPage() {
       <section id="planos" className="mx-auto max-w-6xl px-4 py-16">
         <div>
           <h2 className="font-display text-4xl text-ink">Pacotes de acesso</h2>
-          <p className="mt-2 text-mute">PODMEI Pro para o MEI. PODMEI Contador para o escritório.</p>
+          <p className="mt-2 text-mute">
+            {canPurchase
+              ? "PODMEI Pro para o MEI. PODMEI Contador para o escritório."
+              : "PODMEI Pro para o MEI. PODMEI Contador para o escritório. Assinatura apenas em podmei.com."}
+          </p>
         </div>
         <div className="mt-8 grid gap-4 lg:grid-cols-2">
           {PLAN_KEYS.map((key) => {
@@ -231,9 +249,13 @@ export function LandingPage() {
                     <li key={item}>• {item}</li>
                   ))}
                 </ul>
-                <Link to={`/assinar/${key}`} className="btn-primary mt-6 inline-flex w-full">
-                  Assinar {p.name}
-                </Link>
+                {canPurchase ? (
+                  <Link to={`/assinar/${key}`} className="btn-primary mt-6 inline-flex w-full">
+                    Assinar {p.name}
+                  </Link>
+                ) : (
+                  <p className="mt-6 text-sm text-mute">Disponível para assinantes. Entre com sua conta ou assine em podmei.com.</p>
+                )}
               </article>
             );
           })}

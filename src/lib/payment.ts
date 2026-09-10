@@ -1,3 +1,4 @@
+import { allowsExternalPurchaseUi } from "./native";
 import type { Lead } from "./platform-types";
 
 const SESSION_KEY = "podmei-assine";
@@ -35,6 +36,7 @@ export function redirectToMercadoPago(
     nome?: string;
   },
 ): boolean {
+  if (!allowsExternalPurchaseUi()) return false;
   const url = mercadoPagoCheckoutUrl(lead);
   if (!url) return false;
   const id = ("signupId" in lead && lead.signupId) || ("id" in lead ? lead.id : "") || "";

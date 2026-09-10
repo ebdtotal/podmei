@@ -23,3 +23,19 @@ export async function iniciarAppNativo() {
 export function ehAppNativo() {
   return Capacitor.isNativePlatform();
 }
+
+export function isNativeApp() {
+  return Capacitor.isNativePlatform();
+}
+
+export function isIosApp() {
+  return Capacitor.getPlatform() === "ios";
+}
+
+/**
+ * Guideline 3.1.1: no paid digital content / Pro upgrade via external payment inside the iOS app.
+ * Web and Android keep Mercado Pago checkout.
+ */
+export function allowsExternalPurchaseUi() {
+  return !isIosApp();
+}
