@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
 import { ExternalLink, Printer, UserRound } from "lucide-react";
+import { HoleriteSheet } from "@/components/folha/HoleriteSheet";
 import { SALARIO_MINIMO } from "@/lib/das";
 import { printOrSharePdf } from "@/lib/print";
 import {
@@ -82,9 +83,23 @@ export function FolhaPage() {
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
-          <button type="button" className="btn-ghost gap-2" onClick={() => void printOrSharePdf("holerite.pdf")}>
+          <button
+            type="button"
+            className="btn-ghost gap-2 disabled:opacity-50"
+            disabled={!display || !employee}
+            onClick={() => void printOrSharePdf("folha-pagamento.pdf", ".print-sheet")}
+          >
             <Printer className="size-4" />
-            PDF A4 holerite
+            Folha pgto
+          </button>
+          <button
+            type="button"
+            className="btn-ghost gap-2 disabled:opacity-50"
+            disabled={!display || !employee}
+            onClick={() => void printOrSharePdf("holerite.pdf", ".print-holerite")}
+          >
+            <Printer className="size-4" />
+            Holerite
           </button>
           <a href={GOV_LINKS.esocialFolha} target="_blank" rel="noreferrer" className="btn-primary gap-2">
             Abrir eSocial MEI
@@ -199,7 +214,8 @@ export function FolhaPage() {
               <button
                 key={key}
                 type="button"
-                className={cn("btn-ghost", kind === key && "bg-navy text-white hover:bg-navy hover:text-white")}
+                className={kind === key ? "btn-primary" : "btn-ghost"}
+                aria-pressed={kind === key}
                 onClick={() => {
                   setKind(key);
                   setExtras(0);
@@ -325,6 +341,11 @@ export function FolhaPage() {
           </div>
         </>
       )}
+      {display && employee ? (
+        <div className="pointer-events-none fixed top-0 -left-[14000px] w-[718px]" aria-hidden>
+          <HoleriteSheet company={company} employee={employee} year={year} month={month} pay={display} />
+        </div>
+      ) : null}
     </div>
   );
 }
@@ -384,6 +405,12 @@ function EmployeeForm({
       </Field>
       <Field label="Cargo">
         <input className="input" value={draft.cargo} onChange={(e) => setDraft({ ...draft, cargo: e.target.value })} />
+      </Field>
+      <Field label="Código">
+        <input className="input" value={draft.codigo || ""} onChange={(e) => setDraft({ ...draft, codigo: e.target.value })} />
+      </Field>
+      <Field label="CBO">
+        <input className="input" value={draft.cbo || ""} onChange={(e) => setDraft({ ...draft, cbo: e.target.value })} />
       </Field>
       <Field label="Admissão">
         <input

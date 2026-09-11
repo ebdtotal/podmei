@@ -62,6 +62,10 @@ export interface Contact {
   telefone: string;
   email: string;
   endereco: string;
+  numero?: string;
+  complemento?: string;
+  bairro?: string;
+  cep?: string;
   cidade: string;
   uf: string;
   observacao: string;
@@ -128,6 +132,8 @@ export interface Employee {
   nome: string;
   cpf: string;
   cargo: string;
+  codigo?: string;
+  cbo?: string;
   dataAdmissao: string;
   dataDesligamento?: string;
   salario: number;

@@ -99,6 +99,72 @@ function alert_active_client(array $ws): ?array {
   return is_array($clients[0]) ? $clients[0] : null;
 }
 
+function alert_business_day(string $iso): string {
+  $ts = strtotime($iso . " 12:00:00");
+  if ($ts === false) return $iso;
+  $dow = (int) date("w", $ts);
+  if ($dow === 0) $ts = strtotime("+1 day", $ts);
+  if ($dow === 6) $ts = strtotime("+2 days", $ts);
+  return date("Y-m-d", $ts);
+}
+
+function alert_labor_paid(array $payrolls, int $year, int $month): bool {
+  $keyMonth = $month;
+  foreach ($payrolls as $run) {
+    if (!is_array($run)) continue;
+    if ((string) ($run["kind"] ?? "") !== "mensal") continue;
+    if ((int) ($run["year"] ?? 0) !== $year) continue;
+    if ((int) ($run["month"] ?? -1) !== $keyMonth) continue;
+    return !empty($run["daePaid"]);
+  }
+  return false;
+}
+
+function alert_employed(array $employee, int $year, int $month): bool {
+  $key = sprintf("%04d-%02d", $year, $month + 1);
+  $start = substr((string) ($employee["dataAdmissao"] ?? ""), 0, 7);
+  if ($start !== "" && $start > $key) return false;
+  $end = substr((string) ($employee["dataDesligamento"] ?? ""), 0, 7);
+  if ($end !== "" && $end < $key) return false;
+  return true;
+}
+
+/** @return list<array{key:string,subject:string,body:string}> */
+function alert_labor(array $employee, array $payrolls, string $today, int $year, array $months, string $empresa): array {
+  $out = [];
+  $nome = trim((string) ($employee["nome"] ?? "colaborador"));
+  foreach ([$year - 1, $year] as $y) {
+    for ($month = 0; $month < 12; $month++) {
+      if (!alert_employed($employee, $y, $month)) continue;
+      if (alert_labor_paid($payrolls, $y, $month)) continue;
+      $ref = $months[$month] . "/" . $y;
+      $next = strtotime(sprintf("%04d-%02d-01", $y, $month + 1) . " +1 month");
+      if ($next === false) continue;
+      $duties = [
+        ["id" => "fgts", "title" => "guia de FGTS", "due" => alert_business_day(date("Y-m-07", $next))],
+        ["id" => "inss", "title" => "INSS", "due" => alert_business_day(date("Y-m-20", $next))],
+      ];
+      foreach ($duties as $duty) {
+        $due = $duty["due"];
+        $diff = (int) round((strtotime($due . " 12:00:00") - strtotime($today . " 12:00:00")) / 86400);
+        if ($diff > 5) continue;
+        if ($diff < 0 && $y < $year) continue;
+        $late = $diff < 0;
+        $quando = $diff === 0 ? "vence hoje" : "vence em {$diff} dia" . ($diff === 1 ? "" : "s");
+        $dutyId = (string) $duty["id"];
+        $dutyTitle = (string) $duty["title"];
+        $comp = sprintf("%04d-%02d", $y, $month + 1);
+        $out[] = [
+          "key" => ($late ? "folha-{$dutyId}-late:" : "folha-{$dutyId}:") . $comp,
+          "subject" => ($late ? "Pagar {$dutyTitle} de {$ref} em atraso" : "Pagar {$dutyTitle} de {$ref} {$quando}") . " — PODMEI",
+          "body" => "Olá,\n\n{$empresa} tem colaborador cadastrado ({$nome}). A {$dutyTitle} de {$ref} " . ($late ? "venceu em " : "vence em ") . alert_date($due) . ".\n\nQuite a guia no eSocial e lance o pagamento na folha:\nhttps://podmei.com/app/folha\n\nPODMEI",
+        ];
+      }
+    }
+  }
+  return $out;
+}
+
 /** @return list<array{key:string,subject:string,body:string}> */
 function alert_compute(array $ws, string $today): array {
   $client = alert_active_client($ws);
@@ -162,6 +228,12 @@ function alert_compute(array $ws, string $today): array {
     if ($oy > $year) $monthsOpen = 0;
   }
   $limit = ($annual / 12) * $monthsOpen;
+  $employee = is_array($client["employee"] ?? null) ? $client["employee"] : null;
+  $payrolls = is_array($client["payrolls"] ?? null) ? $client["payrolls"] : [];
+  if (is_array($employee) && (string) ($employee["status"] ?? "") === "ativo") {
+    $out = array_merge($out, alert_labor($employee, $payrolls, $today, $year, $months, $nome));
+  }
+
   if ($limit > 0 && $billed > 0) {
     $pct = ($billed / $limit) * 100;
     $band = $pct >= 100 ? 100 : ($pct >= 90 ? 90 : ($pct >= 70 ? 70 : 0));

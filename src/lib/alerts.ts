@@ -1,16 +1,29 @@
 import { dasBreakdown, dasCompetenceKey, dasDueDate, dasPaidMap, resolveDasPerfil } from "./das";
+import {
+  calcPayroll,
+  employedInMonth,
+  fgtsDueDate,
+  hasActiveEmployee,
+  inssColaboradorDueDate,
+  payrollMap,
+} from "./folha";
 import { proportionalLimit, totalRevenue, yearEntries } from "./mei";
-import type { Company, Entry } from "./types";
+import type { Company, Employee, Entry, PayrollRun } from "./types";
 import { MONTHS } from "./types";
 import { formatDate, formatMoney, todayIso } from "./utils";
 
 export type AppAlert = {
   id: string;
-  kind: "das" | "limite";
+  kind: "das" | "limite" | "folha";
   level: "warn" | "danger";
   title: string;
   body: string;
   href: string;
+};
+
+export type LaborContext = {
+  employee: Employee | null;
+  payrolls?: PayrollRun[];
 };
 
 function daysBetween(fromIso: string, toIso: string) {
@@ -26,7 +39,12 @@ function openedBefore(company: Company, year: number, month: number) {
   return opened.slice(0, 7) <= key;
 }
 
-export function buildAlerts(company: Company, entries: Entry[], today = todayIso()): AppAlert[] {
+export function buildAlerts(
+  company: Company,
+  entries: Entry[],
+  today = todayIso(),
+  labor?: LaborContext,
+): AppAlert[] {
   const alerts: AppAlert[] = [];
   const paid = dasPaidMap(entries);
   const year = Number(today.slice(0, 4));
@@ -82,6 +100,61 @@ export function buildAlerts(company: Company, entries: Entry[], today = todayIso
         }`,
         href: "/app/limites",
       });
+    }
+  }
+
+  if (labor && hasActiveEmployee(labor.employee)) {
+    alerts.push(...laborAlerts(labor.employee, labor.payrolls, today));
+  }
+
+  return alerts;
+}
+
+function laborAlerts(employee: Employee, payrolls: PayrollRun[] | undefined, today: string): AppAlert[] {
+  const alerts: AppAlert[] = [];
+  const year = Number(today.slice(0, 4));
+  const map = payrollMap(payrolls);
+  const nome = employee.nome || "colaborador";
+
+  for (const y of [year - 1, year]) {
+    for (let month = 0; month < 12; month++) {
+      if (!employedInMonth(employee, y, month)) continue;
+      const run = map.get(`mensal-${y}-${String(month + 1).padStart(2, "0")}`);
+      if (run?.daePaid) continue;
+      const calc = calcPayroll({ employee, year: y, month, kind: "mensal" });
+      const ref = `${MONTHS[month]}/${y}`;
+      const duties = [
+        {
+          id: "inss",
+          title: "INSS",
+          due: inssColaboradorDueDate(y, month),
+          amount: calc.inssEmpregado + calc.inssPatronal,
+          hint: "Quite a guia do INSS do colaborador (DAE) no eSocial.",
+        },
+        {
+          id: "fgts",
+          title: "FGTS",
+          due: fgtsDueDate(y, month),
+          amount: calc.fgts,
+          hint: "Quite a guia de FGTS do colaborador no eSocial.",
+        },
+      ];
+      for (const duty of duties) {
+        if (duty.due > today && daysBetween(today, duty.due) > 5) continue;
+        const late = duty.due < today;
+        if (late && y < year) continue;
+        const days = daysBetween(today, duty.due);
+        alerts.push({
+          id: late ? `folha-${duty.id}-late:${y}-${month + 1}` : `folha-${duty.id}:${y}-${month + 1}`,
+          kind: "folha",
+          level: late ? "danger" : "warn",
+          title: late
+            ? `Pagar ${duty.title} de ${ref} em atraso`
+            : `Pagar ${duty.title} de ${ref} ${days === 0 ? "vence hoje" : `vence em ${days} dia${days === 1 ? "" : "s"}`}`,
+          body: `${nome}: ${duty.hint} Vencimento ${formatDate(duty.due)}. Valor estimado ${formatMoney(duty.amount)}.`,
+          href: "/app/folha",
+        });
+      }
     }
   }
 

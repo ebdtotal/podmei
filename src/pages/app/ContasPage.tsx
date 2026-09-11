@@ -4,11 +4,12 @@ import { chargeMessage, chargePhone, pixKeyForCompany, pixPayloadForEntry, resol
 import { printOrSharePdf } from "@/lib/print";
 import { useStore } from "@/lib/store";
 import type { Company, Entry } from "@/lib/types";
-import { cn, formatDate, formatMoney, todayIso } from "@/lib/utils";
+import { cn, formatDate, formatMoney, todayIso, uid } from "@/lib/utils";
 
 export function ContasPage() {
-  const { company, entries, contacts, updateEntry } = useStore();
+  const { company, entries, contacts, updateEntry, addEntry } = useStore();
   const [charge, setCharge] = useState<Entry | null>(null);
+  const [settle, setSettle] = useState<{ entry: Entry; action: "Receber" | "Pagar" } | null>(null);
   const receber = useMemo(
     () =>
       entries
@@ -32,7 +33,7 @@ export function ContasPage() {
         <div>
           <h1 className="font-display text-3xl text-ink">Contas a receber e a pagar</h1>
           <p className="mt-1 text-sm text-mute">
-            A data da operação fica no lançamento. Aqui entra a data em que o valor deve ser recebido ou pago.
+            A data da operação fica no lançamento. Ao receber ou pagar, informe a data e o valor — o saldo restante continua em aberto.
           </p>
         </div>
         <button type="button" className="btn-primary gap-2" onClick={() => void printOrSharePdf("contas.pdf")}>
@@ -61,7 +62,7 @@ export function ContasPage() {
           title="A receber"
           dueLabel="Data a receber"
           rows={receber}
-          onPay={(id) => updateEntry(id, { status: "liquidado" })}
+          onPay={(entry) => setSettle({ entry, action: "Receber" })}
           action="Receber"
           onCharge={setCharge}
         />
@@ -69,10 +70,21 @@ export function ContasPage() {
           title="A pagar"
           dueLabel="Data a pagar"
           rows={pagar}
-          onPay={(id) => updateEntry(id, { status: "liquidado" })}
+          onPay={(entry) => setSettle({ entry, action: "Pagar" })}
           action="Pagar"
         />
         </article>
+      {settle ? (
+        <SettlePanel
+          entry={settle.entry}
+          action={settle.action}
+          onClose={() => setSettle(null)}
+          onConfirm={(date, amount) => {
+            applySettlement(settle.entry, settle.action, date, amount, updateEntry, addEntry);
+            setSettle(null);
+          }}
+        />
+      ) : null}
       {charge ? (
         <ChargePanel
           company={company}
@@ -96,7 +108,7 @@ function Board({
   title: string;
   dueLabel: string;
   rows: ReturnType<typeof useStore>["entries"];
-  onPay: (id: string) => void;
+  onPay: (entry: Entry) => void;
   action: string;
   onCharge?: (entry: Entry) => void;
 }) {
@@ -144,7 +156,7 @@ function Board({
                           Cobrar
                         </button>
                       ) : null}
-                      <button className="btn-primary" onClick={() => onPay(e.id)}>
+                      <button className="btn-primary" onClick={() => onPay(e)}>
                         {action}
                       </button>
                     </div>
@@ -157,6 +169,120 @@ function Board({
       </table>
       </div>
     </section>
+  );
+}
+
+function round2(value: number) {
+  return Math.round(value * 100) / 100;
+}
+
+function applySettlement(
+  entry: Entry,
+  action: "Receber" | "Pagar",
+  date: string,
+  amount: number,
+  updateEntry: (id: string, patch: Partial<Entry>) => void,
+  addEntry: (entry: Entry) => void,
+) {
+  const paid = round2(amount);
+  const saldo = round2(entry.valor);
+  if (!date || paid <= 0 || paid > saldo + 0.001) return;
+  const full = paid >= saldo - 0.009;
+  const note = entry.observacao?.trim() ? `${entry.observacao.trim()} ` : "";
+  if (full) {
+    updateEntry(entry.id, {
+      status: "liquidado",
+      data: date,
+      valor: paid,
+      quantidade: 1,
+      precoUnitario: paid,
+      descontoValor: 0,
+      observacao:
+        date !== entry.data ? `${note}Operação em ${formatDate(entry.data)}.`.trim() : entry.observacao,
+    });
+    return;
+  }
+  const resto = round2(saldo - paid);
+  const label = action === "Receber" ? "recebimento parcial" : "pagamento parcial";
+  addEntry({
+    ...entry,
+    id: uid("mov"),
+    data: date,
+    valor: paid,
+    status: "liquidado",
+    quantidade: 1,
+    precoUnitario: paid,
+    descontoValor: 0,
+    descricao: `${entry.descricao} (${label})`.trim(),
+    observacao: `${note}Baixa parcial de ${formatMoney(paid)} em ${formatDate(date)}.`.trim(),
+  });
+  updateEntry(entry.id, {
+    valor: resto,
+    quantidade: 1,
+    precoUnitario: resto,
+    descontoValor: 0,
+    observacao: `${note}Saldo após baixa parcial.`.trim(),
+  });
+}
+
+function SettlePanel({
+  entry,
+  action,
+  onClose,
+  onConfirm,
+}: {
+  entry: Entry;
+  action: "Receber" | "Pagar";
+  onClose: () => void;
+  onConfirm: (date: string, amount: number) => void;
+}) {
+  const [date, setDate] = useState(todayIso());
+  const [amount, setAmount] = useState(String(entry.valor));
+  const paid = round2(Number(String(amount).replace(",", ".")) || 0);
+  const saldo = round2(entry.valor);
+  const resto = round2(saldo - paid);
+  const valid = Boolean(date) && paid > 0 && paid <= saldo + 0.001;
+  const receive = action === "Receber";
+
+  return (
+    <div className="fixed inset-0 z-50 grid place-items-center bg-black/40 p-4">
+      <div className="w-full max-w-md rounded-2xl border border-line bg-paper p-5 shadow-xl">
+        <h2 className="font-display text-2xl text-ink">{receive ? "Receber" : "Pagar"}</h2>
+        <p className="mt-1 text-sm text-mute">
+          {entry.contraparte || "Lançamento"} · saldo {formatMoney(saldo)}
+        </p>
+        <div className="mt-4 grid gap-3">
+          <label className="text-xs font-medium text-mute">
+            {receive ? "Data do recebimento" : "Data do pagamento"}
+            <input className="input mt-1" type="date" value={date} onChange={(e) => setDate(e.target.value)} />
+          </label>
+          <label className="text-xs font-medium text-mute">
+            {receive ? "Valor recebido" : "Valor pago"}
+            <input
+              className="input mt-1"
+              inputMode="decimal"
+              value={amount}
+              onChange={(e) => setAmount(e.target.value)}
+            />
+          </label>
+        </div>
+        <p className="mt-3 text-sm text-mute">
+          {valid && resto > 0.009
+            ? `Saldo que continua ${receive ? "a receber" : "a pagar"}: ${formatMoney(resto)}.`
+            : valid
+              ? "Este valor quita o lançamento."
+              : "Informe uma data e um valor até o saldo."}
+        </p>
+        <div className="mt-4 flex flex-wrap gap-2">
+          <button type="button" className="btn-primary" disabled={!valid} onClick={() => onConfirm(date, paid)}>
+            Confirmar
+          </button>
+          <button type="button" className="btn-ghost" onClick={onClose}>
+            Cancelar
+          </button>
+        </div>
+      </div>
+    </div>
   );
 }
 

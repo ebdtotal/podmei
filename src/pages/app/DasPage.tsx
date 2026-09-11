@@ -1,5 +1,6 @@
 import { ExternalLink, Printer } from "lucide-react";
 import { useMemo, useState } from "react";
+import { CopyCnpj } from "@/components/CopyCnpj";
 import { BackToReports } from "@/components/layout/BackToReports";
 import { AlertBanners } from "@/components/alerts/AlertBanners";
 import { buildAlerts, visibleAlerts } from "@/lib/alerts";
@@ -159,10 +160,13 @@ export function DasPage() {
             <Printer className="size-4" />
             PDF A4 conferência
           </button>
-          <a href={GOV_LINKS.das} target="_blank" rel="noreferrer" className="btn-primary gap-2">
-            Emitir no PGMEI
-            <ExternalLink className="size-4" />
-          </a>
+          <div className="flex flex-col gap-2">
+            <a href={GOV_LINKS.das} target="_blank" rel="noreferrer" className="btn-primary gap-2">
+              Emitir no PGMEI
+              <ExternalLink className="size-4" />
+            </a>
+            <CopyCnpj cnpj={company.cnpj} hint="Clique para copiar e colar no PGMEI" />
+          </div>
         </div>
       </div>
 

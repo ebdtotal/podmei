@@ -1,5 +1,6 @@
 import { ExternalLink, Printer } from "lucide-react";
 import { useMemo, useState } from "react";
+import { CopyCnpj } from "@/components/CopyCnpj";
 import { BackToReports } from "@/components/layout/BackToReports";
 import { dasnSummary, excessBand, GOV_LINKS, proportionalLimit, totalExpenses, totalRevenue, yearEntries } from "@/lib/mei";
 import { printOrSharePdf } from "@/lib/print";
@@ -40,10 +41,13 @@ export function DasnPage() {
             <Printer className="size-4" />
             PDF A4 planilha
           </button>
-          <a href={GOV_LINKS.dasn} target="_blank" rel="noreferrer" className="btn-primary gap-2">
-            Transmitir no DASN-SIMEI
-            <ExternalLink className="size-4" />
-          </a>
+          <div className="flex flex-col gap-2">
+            <a href={GOV_LINKS.dasn} target="_blank" rel="noreferrer" className="btn-primary gap-2">
+              Transmitir no DASN-SIMEI
+              <ExternalLink className="size-4" />
+            </a>
+            <CopyCnpj cnpj={company.cnpj} hint="Clique para copiar e colar no DASN-SIMEI" />
+          </div>
         </div>
       </div>
 

@@ -11,6 +11,10 @@ const emptyForm = (kind: ContactKind): Omit<Contact, "id"> => ({
   telefone: "",
   email: "",
   endereco: "",
+  numero: "",
+  complemento: "",
+  bairro: "",
+  cep: "",
   cidade: "",
   uf: "SP",
   observacao: "",
@@ -36,7 +40,10 @@ export function CadastrosPage() {
           c.documento.toLowerCase().includes(t) ||
           c.cidade.toLowerCase().includes(t) ||
           c.email.toLowerCase().includes(t) ||
-          c.telefone.includes(t),
+          c.telefone.includes(t) ||
+          (c.endereco || "").toLowerCase().includes(t) ||
+          (c.bairro || "").toLowerCase().includes(t) ||
+          (c.cep || "").includes(t),
       )
       .sort((a, b) => a.nome.localeCompare(b.nome, "pt-BR"));
   }, [contacts, kind, q]);
@@ -63,6 +70,10 @@ export function CadastrosPage() {
       telefone: contact.telefone,
       email: contact.email,
       endereco: contact.endereco,
+      numero: contact.numero || "",
+      complemento: contact.complemento || "",
+      bairro: contact.bairro || "",
+      cep: contact.cep || "",
       cidade: contact.cidade,
       uf: contact.uf,
       observacao: contact.observacao,
@@ -148,10 +159,22 @@ export function CadastrosPage() {
           <Field label="E-mail">
             <input className="input" type="email" value={form.email} onChange={(e) => patch("email", e.target.value)} />
           </Field>
-          <Field label="Endereço">
+          <Field label="CEP">
+            <input className="input" inputMode="numeric" value={form.cep} onChange={(e) => patch("cep", e.target.value)} />
+          </Field>
+          <Field label="Logradouro">
             <input className="input" value={form.endereco} onChange={(e) => patch("endereco", e.target.value)} />
           </Field>
-          <div className="grid grid-cols-3 gap-3">
+          <Field label="Número">
+            <input className="input" value={form.numero} onChange={(e) => patch("numero", e.target.value)} />
+          </Field>
+          <Field label="Complemento">
+            <input className="input" value={form.complemento} onChange={(e) => patch("complemento", e.target.value)} />
+          </Field>
+          <Field label="Bairro">
+            <input className="input" value={form.bairro} onChange={(e) => patch("bairro", e.target.value)} />
+          </Field>
+          <div className="grid grid-cols-[1fr_5rem] gap-3">
             <Field label="Cidade">
               <input className="input" value={form.cidade} onChange={(e) => patch("cidade", e.target.value)} />
             </Field>
@@ -163,7 +186,6 @@ export function CadastrosPage() {
                 onChange={(e) => patch("uf", e.target.value.toUpperCase())}
               />
             </Field>
-            <div />
           </div>
           <Field label="Observação">
             <input className="input md:col-span-2" value={form.observacao} onChange={(e) => patch("observacao", e.target.value)} />
@@ -200,7 +222,7 @@ export function CadastrosPage() {
               <th>Documento</th>
               <th>Telefone</th>
               <th>E-mail</th>
-              <th>Cidade</th>
+              <th>Endereço</th>
               <th />
             </tr>
           </thead>
@@ -218,7 +240,7 @@ export function CadastrosPage() {
                   <td>{c.documento || "—"}</td>
                   <td>{c.telefone || "—"}</td>
                   <td>{c.email || "—"}</td>
-                  <td>{[c.cidade, c.uf].filter(Boolean).join(" / ") || "—"}</td>
+                  <td>{formatAddress(c) || "—"}</td>
                   <td className="pr-3 text-right">
                     <button type="button" className="mr-2 text-xs font-semibold text-navy" onClick={() => startEdit(c)}>
                       <Pencil className="mr-1 inline size-3.5" />
@@ -246,6 +268,12 @@ export function CadastrosPage() {
       </div>
     </div>
   );
+}
+
+function formatAddress(c: Contact) {
+  const street = [c.endereco, c.numero, c.complemento].filter(Boolean).join(", ");
+  const place = [c.bairro, [c.cidade, c.uf].filter(Boolean).join("/"), c.cep].filter(Boolean).join(" · ");
+  return [street, place].filter(Boolean).join(" — ");
 }
 
 function Mini({ label, value }: { label: string; value: number }) {

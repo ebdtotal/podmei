@@ -69,8 +69,33 @@ export function salaryDueDate(year: number, month: number) {
   return fifthBusinessDay(due.getFullYear(), due.getMonth());
 }
 
+function rollBusinessDay(date: Date) {
+  const d = new Date(date);
+  while (d.getDay() === 0 || d.getDay() === 6) d.setDate(d.getDate() + 1);
+  return d;
+}
+
 export function daeDueDate(year: number, month: number) {
-  return isoDate(new Date(year, month + 1, 20));
+  return isoDate(rollBusinessDay(new Date(year, month + 1, 20)));
+}
+
+/** Guia de FGTS do colaborador: dia 7 do mês seguinte à competência. */
+export function fgtsDueDate(year: number, month: number) {
+  return isoDate(rollBusinessDay(new Date(year, month + 1, 7)));
+}
+
+/** INSS do colaborador (guia DAE): dia 20 do mês seguinte. */
+export function inssColaboradorDueDate(year: number, month: number) {
+  return daeDueDate(year, month);
+}
+
+export function employedInMonth(employee: Employee, year: number, month: number) {
+  const key = `${year}-${String(month + 1).padStart(2, "0")}`;
+  const start = (employee.dataAdmissao || "").slice(0, 7);
+  if (start && start > key) return false;
+  const end = (employee.dataDesligamento || "").slice(0, 7);
+  if (end && end < key) return false;
+  return true;
 }
 
 export function payrollCompetenceKey(year: number, month: number, kind: PayrollKind) {

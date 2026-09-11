@@ -67,7 +67,7 @@ export function DashboardPage() {
       ) : null}
 
       <AlertBanners
-        alerts={buildAlerts(company, entries).filter((alert) => !dismissed.has(alert.id))}
+        alerts={buildAlerts(company, entries, undefined, { employee, payrolls }).filter((alert) => !dismissed.has(alert.id))}
         onDismiss={(id) => {
           dismissAlert(id);
           setDismissed(dismissedAlertIds());
