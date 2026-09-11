@@ -1,13 +1,17 @@
-import { Copy, MessageCircle, Printer } from "lucide-react";
+import { Copy, Download, MessageCircle, Printer } from "lucide-react";
 import { useMemo, useState } from "react";
+import { Modal } from "@/components/ui/Modal";
+import { MoneyBrInput } from "@/components/ui/MoneyBrInput";
 import { chargeMessage, chargePhone, pixKeyForCompany, pixPayloadForEntry, resolvePixTipo, whatsappHref } from "@/lib/charge";
+import { exportContasExcel } from "@/lib/exportReports";
+import { futureOpenRecurrenceIds } from "@/lib/parser";
 import { printOrSharePdf } from "@/lib/print";
 import { useStore } from "@/lib/store";
-import type { Company, Entry } from "@/lib/types";
+import type { Company, Entry, PaymentMethod } from "@/lib/types";
 import { cn, formatDate, formatMoney, todayIso, uid } from "@/lib/utils";
 
 export function ContasPage() {
-  const { company, entries, contacts, updateEntry, addEntry } = useStore();
+  const { company, entries, contacts, updateEntry, addEntry, removeEntries } = useStore();
   const [charge, setCharge] = useState<Entry | null>(null);
   const [settle, setSettle] = useState<{ entry: Entry; action: "Receber" | "Pagar" } | null>(null);
   const receber = useMemo(
@@ -27,6 +31,23 @@ export function ContasPage() {
   const totR = receber.reduce((a, e) => a + e.valor, 0);
   const totP = pagar.reduce((a, e) => a + e.valor, 0);
 
+  function stopRecurrence(entry: Entry) {
+    if (!entry.seriesId) return;
+    const ids = futureOpenRecurrenceIds(entries, entry.seriesId);
+    if (!ids.length) {
+      window.alert("Não há parcelas futuras em aberto nesta recorrência.");
+      return;
+    }
+    if (
+      !window.confirm(
+        `Parar recorrência? Serão excluídas ${ids.length} parcela${ids.length > 1 ? "s" : ""} futura${ids.length > 1 ? "s" : ""} em aberto. O que já foi recebido/pago permanece.`,
+      )
+    ) {
+      return;
+    }
+    removeEntries(ids);
+  }
+
   return (
     <div className="min-w-0 max-w-full space-y-6">
       <div className="no-print flex flex-wrap items-end justify-between gap-3">
@@ -34,12 +55,23 @@ export function ContasPage() {
           <h1 className="font-display text-3xl text-ink">Contas a receber e a pagar</h1>
           <p className="mt-1 text-sm text-mute">
             A data da operação fica no lançamento. Ao receber ou pagar, informe a data e o valor — o saldo restante continua em aberto.
+            Em recorrências, use Parar para excluir só as parcelas futuras.
           </p>
         </div>
-        <button type="button" className="btn-primary gap-2" onClick={() => void printOrSharePdf("contas.pdf")}>
-          <Printer className="size-4" />
-          Gerar PDF A4
-        </button>
+        <div className="flex flex-wrap gap-2">
+          <button
+            type="button"
+            className="btn-ghost gap-2"
+            onClick={() => exportContasExcel(receber, pagar, "contas-receber-pagar.xlsx")}
+          >
+            <Download className="size-4" />
+            Excel
+          </button>
+          <button type="button" className="btn-primary gap-2" onClick={() => void printOrSharePdf("contas.pdf")}>
+            <Printer className="size-4" />
+            Gerar PDF A4
+          </button>
+        </div>
       </div>
       <div className="grid gap-4 md:grid-cols-2">
         <div className="rounded-2xl bg-blue px-4 py-4 text-white">
@@ -62,16 +94,20 @@ export function ContasPage() {
           title="A receber"
           dueLabel="Data a receber"
           rows={receber}
+          allEntries={entries}
           onPay={(entry) => setSettle({ entry, action: "Receber" })}
           action="Receber"
           onCharge={setCharge}
+          onStopRecurrence={stopRecurrence}
         />
         <Board
           title="A pagar"
           dueLabel="Data a pagar"
           rows={pagar}
+          allEntries={entries}
           onPay={(entry) => setSettle({ entry, action: "Pagar" })}
           action="Pagar"
+          onStopRecurrence={stopRecurrence}
         />
         </article>
       {settle ? (
@@ -79,8 +115,8 @@ export function ContasPage() {
           entry={settle.entry}
           action={settle.action}
           onClose={() => setSettle(null)}
-          onConfirm={(date, amount) => {
-            applySettlement(settle.entry, settle.action, date, amount, updateEntry, addEntry);
+          onConfirm={(payload) => {
+            applySettlement(settle.entry, settle.action, payload, updateEntry, addEntry);
             setSettle(null);
           }}
         />
@@ -101,23 +137,27 @@ function Board({
   title,
   dueLabel,
   rows,
+  allEntries,
   onPay,
   action,
   onCharge,
+  onStopRecurrence,
 }: {
   title: string;
   dueLabel: string;
-  rows: ReturnType<typeof useStore>["entries"];
+  rows: Entry[];
+  allEntries: Entry[];
   onPay: (entry: Entry) => void;
   action: string;
   onCharge?: (entry: Entry) => void;
+  onStopRecurrence?: (entry: Entry) => void;
 }) {
   const today = todayIso();
   return (
     <section className="max-w-full overflow-hidden rounded-2xl border border-line bg-paper">
       <div className="border-b border-line px-4 py-3 text-sm font-semibold">{title}</div>
       <div className="max-w-full overflow-x-auto overscroll-x-contain touch-pan-x [-webkit-overflow-scrolling:touch]">
-      <table className="w-full min-w-[44rem] text-sm">
+      <table className="w-full min-w-[48rem] text-sm">
         <thead className="text-left text-xs text-mute">
           <tr>
             <th className="px-4 py-2">Data da operação</th>
@@ -139,18 +179,35 @@ function Board({
             rows.map((e) => {
               const due = e.vencimento || e.data;
               const late = due < today;
+              const canStop =
+                Boolean(e.seriesId) &&
+                (e.seriesKind === "recorrente" || !e.seriesKind) &&
+                futureOpenRecurrenceIds(allEntries, e.seriesId!).length > 0;
               return (
                 <tr key={e.id} className="border-t border-line">
                   <td className="px-4 py-3">{formatDate(e.data)}</td>
                   <td className={cn("font-semibold", late && "text-red")}>
                     {formatDate(due)}
                     {late ? <span className="ml-2 text-[10px] font-bold uppercase">Atrasado</span> : null}
+                    {e.seriesKind === "recorrente" || (e.seriesId && !e.seriesKind) ? (
+                      <span className="ml-2 text-[10px] font-bold uppercase text-navy">Recorrente</span>
+                    ) : null}
                   </td>
                   <td>{e.contraparte}</td>
                   <td>{e.descricao}</td>
                   <td>{formatMoney(e.valor)}</td>
                   <td className="no-print sticky right-0 z-10 bg-paper pr-3 text-right shadow-[-10px_0_12px_-10px_rgba(0,0,0,.25)]">
                     <div className="flex flex-nowrap justify-end gap-2 whitespace-nowrap py-1">
+                      {canStop && onStopRecurrence ? (
+                        <button
+                          className="btn-ghost text-xs"
+                          type="button"
+                          title="Exclui parcelas futuras em aberto; mantém as já recebidas/pagas"
+                          onClick={() => onStopRecurrence(e)}
+                        >
+                          Parar
+                        </button>
+                      ) : null}
                       {onCharge ? (
                         <button className="btn-ghost" type="button" onClick={() => onCharge(e)}>
                           Cobrar
@@ -176,45 +233,61 @@ function round2(value: number) {
   return Math.round(value * 100) / 100;
 }
 
+type SettlePayload = {
+  date: string;
+  amount: number;
+  formaPagamento: PaymentMethod;
+  descricao: string;
+};
+
 function applySettlement(
   entry: Entry,
   action: "Receber" | "Pagar",
-  date: string,
-  amount: number,
+  payload: SettlePayload,
   updateEntry: (id: string, patch: Partial<Entry>) => void,
   addEntry: (entry: Entry) => void,
 ) {
-  const paid = round2(amount);
+  const paid = round2(payload.amount);
   const saldo = round2(entry.valor);
-  if (!date || paid <= 0 || paid > saldo + 0.001) return;
+  if (!payload.date || paid <= 0 || paid > saldo + 0.001) return;
   const full = paid >= saldo - 0.009;
   const note = entry.observacao?.trim() ? `${entry.observacao.trim()} ` : "";
+  const descricao = payload.descricao.trim() || entry.descricao;
+
   if (full) {
     updateEntry(entry.id, {
       status: "liquidado",
-      data: date,
+      data: payload.date,
       valor: paid,
+      formaPagamento: payload.formaPagamento,
+      descricao,
       quantidade: 1,
       precoUnitario: paid,
       descontoValor: 0,
+      vencimento: undefined,
       observacao:
-        date !== entry.data ? `${note}Operação em ${formatDate(entry.data)}.`.trim() : entry.observacao,
+        payload.date !== entry.data
+          ? `${note}Operação em ${formatDate(entry.data)}.`.trim()
+          : entry.observacao,
     });
     return;
   }
+
   const resto = round2(saldo - paid);
   const label = action === "Receber" ? "recebimento parcial" : "pagamento parcial";
   addEntry({
     ...entry,
     id: uid("mov"),
-    data: date,
+    data: payload.date,
     valor: paid,
     status: "liquidado",
+    formaPagamento: payload.formaPagamento,
     quantidade: 1,
     precoUnitario: paid,
     descontoValor: 0,
-    descricao: `${entry.descricao} (${label})`.trim(),
-    observacao: `${note}Baixa parcial de ${formatMoney(paid)} em ${formatDate(date)}.`.trim(),
+    vencimento: undefined,
+    descricao,
+    observacao: `${note}Baixa parcial (${label}) de ${formatMoney(paid)} em ${formatDate(payload.date)}.`.trim(),
   });
   updateEntry(entry.id, {
     valor: resto,
@@ -234,55 +307,73 @@ function SettlePanel({
   entry: Entry;
   action: "Receber" | "Pagar";
   onClose: () => void;
-  onConfirm: (date: string, amount: number) => void;
+  onConfirm: (payload: SettlePayload) => void;
 }) {
-  const [date, setDate] = useState(todayIso());
-  const [amount, setAmount] = useState(String(entry.valor));
-  const paid = round2(Number(String(amount).replace(",", ".")) || 0);
-  const saldo = round2(entry.valor);
-  const resto = round2(saldo - paid);
-  const valid = Boolean(date) && paid > 0 && paid <= saldo + 0.001;
   const receive = action === "Receber";
+  const [date, setDate] = useState(todayIso());
+  const [amount, setAmount] = useState(entry.valor);
+  const [formaPagamento, setFormaPagamento] = useState<PaymentMethod>(entry.formaPagamento || "pix");
+  const [descricao, setDescricao] = useState(entry.descricao || "");
+  const paid = round2(amount);
+  const saldo = round2(entry.valor);
+  const valid = Boolean(date) && paid > 0 && paid <= saldo + 0.001;
 
   return (
-    <div className="fixed inset-0 z-50 grid place-items-center bg-black/40 p-4">
-      <div className="w-full max-w-md rounded-2xl border border-line bg-paper p-5 shadow-xl">
-        <h2 className="font-display text-2xl text-ink">{receive ? "Receber" : "Pagar"}</h2>
-        <p className="mt-1 text-sm text-mute">
-          {entry.contraparte || "Lançamento"} · saldo {formatMoney(saldo)}
+    <Modal open title={receive ? "Receber" : "Pagar"} onClose={onClose}>
+      <form
+        className="grid gap-3 sm:grid-cols-2"
+        onSubmit={(e) => {
+          e.preventDefault();
+          if (!valid) return;
+          onConfirm({ date, amount: paid, formaPagamento, descricao });
+        }}
+      >
+        <label className="block text-xs font-medium text-mute">
+          {receive ? "Data de recebimento" : "Data de pagamento"}
+          <input
+            className="input mt-1.5"
+            type="date"
+            value={date}
+            onChange={(e) => setDate(e.target.value)}
+            required
+          />
+        </label>
+        <label className="block text-xs font-medium text-mute">
+          Valor
+          <MoneyBrInput className="input mt-1.5" value={amount} onChange={setAmount} required />
+        </label>
+        <label className="block text-xs font-medium text-mute sm:col-span-2">
+          Pagamento
+          <select
+            className="input mt-1.5"
+            value={formaPagamento}
+            onChange={(e) => setFormaPagamento(e.target.value as PaymentMethod)}
+          >
+            <option value="pix">PIX</option>
+            <option value="dinheiro">Dinheiro</option>
+            <option value="debito">Débito</option>
+            <option value="credito">Crédito</option>
+            <option value="boleto">Boleto</option>
+            <option value="transferencia">Transferência</option>
+          </select>
+        </label>
+        <label className="block text-xs font-medium text-mute sm:col-span-2">
+          Descrição do lançamento
+          <input
+            className="input mt-1.5"
+            value={descricao}
+            onChange={(e) => setDescricao(e.target.value)}
+            placeholder="Ex.: parcela 2"
+          />
+        </label>
+        <p className="text-xs text-mute sm:col-span-2">
+          O saldo do lançamento original será zerado e um novo lançamento será criado com o histórico da parcela.
         </p>
-        <div className="mt-4 grid gap-3">
-          <label className="text-xs font-medium text-mute">
-            {receive ? "Data do recebimento" : "Data do pagamento"}
-            <input className="input mt-1" type="date" value={date} onChange={(e) => setDate(e.target.value)} />
-          </label>
-          <label className="text-xs font-medium text-mute">
-            {receive ? "Valor recebido" : "Valor pago"}
-            <input
-              className="input mt-1"
-              inputMode="decimal"
-              value={amount}
-              onChange={(e) => setAmount(e.target.value)}
-            />
-          </label>
-        </div>
-        <p className="mt-3 text-sm text-mute">
-          {valid && resto > 0.009
-            ? `Saldo que continua ${receive ? "a receber" : "a pagar"}: ${formatMoney(resto)}.`
-            : valid
-              ? "Este valor quita o lançamento."
-              : "Informe uma data e um valor até o saldo."}
-        </p>
-        <div className="mt-4 flex flex-wrap gap-2">
-          <button type="button" className="btn-primary" disabled={!valid} onClick={() => onConfirm(date, paid)}>
-            Confirmar
-          </button>
-          <button type="button" className="btn-ghost" onClick={onClose}>
-            Cancelar
-          </button>
-        </div>
-      </div>
-    </div>
+        <button type="submit" className="btn-primary w-full sm:col-span-2" disabled={!valid}>
+          Confirmar baixa
+        </button>
+      </form>
+    </Modal>
   );
 }
 
@@ -300,8 +391,10 @@ function ChargePanel({
   const tipo = resolvePixTipo(company);
   const chave = pixKeyForCompany(company);
   const pix = pixPayloadForEntry(company, entry);
-  const text = chargeMessage(company, entry);
+  const [forma, setForma] = useState<PaymentMethod>(entry.formaPagamento || "pix");
+  const text = chargeMessage(company, { ...entry, formaPagamento: forma });
   const [copied, setCopied] = useState("");
+  const remindDays = company.lembreteContasDias ?? 3;
 
   async function copy(label: string, value: string) {
     await navigator.clipboard.writeText(value);
@@ -322,11 +415,24 @@ function ChargePanel({
           Fechar
         </button>
       </div>
-      {!chave ? (
-        <p className="mt-3 text-sm text-red">
-          Cadastre a chave Pix em Empresa para gerar a cobrança.
-        </p>
-      ) : (
+      <label className="mt-4 block text-xs font-medium text-mute">
+        Forma de cobrança na mensagem
+        <select className="input mt-1.5" value={forma} onChange={(e) => setForma(e.target.value as PaymentMethod)}>
+          <option value="pix">PIX</option>
+          <option value="boleto">Boleto</option>
+          <option value="transferencia">Transferência</option>
+          <option value="credito">Cartão / crédito</option>
+          <option value="dinheiro">Dinheiro</option>
+        </select>
+      </label>
+      <p className="mt-2 text-xs text-mute">
+        Lembretes automáticos: contas que vencem em até {remindDays} dia{remindDays === 1 ? "" : "s"} aparecem nos
+        avisos (ajuste em Metas).
+      </p>
+      {!chave && forma === "pix" ? (
+        <p className="mt-3 text-sm text-red">Cadastre a chave Pix em Empresa para gerar a cobrança Pix.</p>
+      ) : null}
+      {chave && forma === "pix" ? (
         <div className="mt-4 space-y-3">
           <div className="rounded-2xl bg-bg p-4">
             <p className="text-xs font-semibold uppercase tracking-wide text-mute">
@@ -349,7 +455,7 @@ function ChargePanel({
             </div>
           ) : null}
         </div>
-      )}
+      ) : null}
       <div className="mt-4 flex flex-wrap gap-2">
         <a className="btn-primary gap-2" href={whatsappHref(phone, text)} target="_blank" rel="noreferrer">
           <MessageCircle className="size-4" />

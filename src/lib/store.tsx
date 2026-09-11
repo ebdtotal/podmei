@@ -1,5 +1,5 @@
 import { createContext, useContext, useMemo, useState, type ReactNode } from "react";
-import type { Accountant, AppState, Company, Contact, Employee, Entry, MeiClient, PayrollRun, PlanKey, Product, WhatsAppMessage, Workspace } from "./types";
+import type { Accountant, AppState, CalendarEvent, Company, Contact, Employee, Entry, Investment, InvestmentMovement, MeiClient, PayrollRun, PlanKey, Product, WhatsAppMessage, Workspace } from "./types";
 import { normalizePlan } from "./plans";
 import { demoAccountant, demoClients, welcomeWhatsapp } from "./seed";
 import { todayIso, uid } from "./utils";
@@ -84,6 +84,9 @@ export function createMeiClient(patch?: ClientDraft): MeiClient {
     payrolls: [],
     contacts: [],
     products: [],
+    events: [],
+    investments: [],
+    investmentMovements: [],
     ...rest,
     company: { ...emptyCompany(), ...company },
   };
@@ -153,6 +156,9 @@ function hydrateClient(client: MeiClient): MeiClient {
     contacts: client.contacts ?? [],
     products: client.products ?? [],
     payrolls: client.payrolls ?? [],
+    events: client.events ?? [],
+    investments: client.investments ?? [],
+    investmentMovements: client.investmentMovements ?? [],
     company: client.company,
   });
 }
@@ -254,12 +260,16 @@ interface StoreValue {
   payrolls: PayrollRun[];
   contacts: Contact[];
   products: Product[];
+  events: CalendarEvent[];
+  investments: Investment[];
+  investmentMovements: InvestmentMovement[];
   setAccountant: (accountant: Accountant) => void;
   setCompany: (company: Company) => void;
   addEntry: (entry: Entry) => void;
   addEntries: (entries: Entry[]) => void;
   updateEntry: (id: string, patch: Partial<Entry>) => void;
   removeEntry: (id: string) => void;
+  removeEntries: (ids: string[]) => void;
   setPlan: (plan: PlanKey) => void;
   addWhatsapp: (msg: WhatsAppMessage) => void;
   setWhatsappPhone: (phone: string) => void;
@@ -271,6 +281,17 @@ interface StoreValue {
   addProduct: (product: Omit<Product, "id" | "createdAt"> & { id?: string; createdAt?: string }) => Product;
   updateProduct: (id: string, patch: Partial<Product>) => void;
   removeProduct: (id: string) => void;
+  addEvent: (event: Omit<CalendarEvent, "id" | "createdAt"> & { id?: string; createdAt?: string }) => CalendarEvent;
+  addEvents: (events: Array<Omit<CalendarEvent, "id" | "createdAt"> & { id?: string; createdAt?: string }>) => CalendarEvent[];
+  updateEvent: (id: string, patch: Partial<CalendarEvent>) => void;
+  removeEvent: (id: string) => void;
+  addInvestment: (investment: Omit<Investment, "id" | "createdAt"> & { id?: string; createdAt?: string }) => Investment;
+  updateInvestment: (id: string, patch: Partial<Investment>) => void;
+  removeInvestment: (id: string) => void;
+  addInvestmentMovement: (
+    move: Omit<InvestmentMovement, "id" | "createdAt"> & { id?: string; createdAt?: string },
+  ) => InvestmentMovement;
+  removeInvestmentMovement: (id: string) => void;
   addClient: (client?: ClientDraft) => MeiClient;
   updateClient: (id: string, patch: Partial<MeiClient>) => void;
   removeClient: (id: string) => void;
@@ -312,6 +333,9 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       payrolls: active.payrolls ?? [],
       contacts: active.contacts ?? [],
       products: active.products ?? [],
+      events: active.events ?? [],
+      investments: active.investments ?? [],
+      investmentMovements: active.investmentMovements ?? [],
       setAccountant: (accountant) => commit((prev) => ({ ...prev, accountant })),
       setCompany: (company) => commit((prev) => patchActive(prev, { company })),
       addEntry: (entry) =>
@@ -340,6 +364,14 @@ export function StoreProvider({ children }: { children: ReactNode }) {
           const cur = activeOf(prev);
           return patchActive(prev, { entries: cur.entries.filter((e) => e.id !== id) });
         }),
+      removeEntries: (ids) => {
+        const set = new Set(ids);
+        if (!set.size) return;
+        commit((prev) => {
+          const cur = activeOf(prev);
+          return patchActive(prev, { entries: cur.entries.filter((e) => !set.has(e.id)) });
+        });
+      },
       setPlan: (plan) => commit((prev) => patchActive(prev, { plan })),
       addWhatsapp: (msg) =>
         commit((prev) => {
@@ -403,6 +435,94 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         commit((prev) => {
           const cur = activeOf(prev);
           return patchActive(prev, { products: (cur.products ?? []).filter((p) => p.id !== id) });
+        }),
+      addEvent: (partial) => {
+        const event: CalendarEvent = {
+          ...partial,
+          id: partial.id || uid("evt"),
+          createdAt: partial.createdAt || todayIso(),
+        };
+        commit((prev) => {
+          const cur = activeOf(prev);
+          return patchActive(prev, { events: [...(cur.events ?? []), event] });
+        });
+        return event;
+      },
+      addEvents: (partials) => {
+        const created = partials.map((partial) => ({
+          ...partial,
+          id: partial.id || uid("evt"),
+          createdAt: partial.createdAt || todayIso(),
+        }));
+        if (created.length) {
+          commit((prev) => {
+            const cur = activeOf(prev);
+            return patchActive(prev, { events: [...(cur.events ?? []), ...created] });
+          });
+        }
+        return created;
+      },
+      updateEvent: (id, patch) =>
+        commit((prev) => {
+          const cur = activeOf(prev);
+          return patchActive(prev, {
+            events: (cur.events ?? []).map((e) => (e.id === id ? { ...e, ...patch } : e)),
+          });
+        }),
+      removeEvent: (id) =>
+        commit((prev) => {
+          const cur = activeOf(prev);
+          return patchActive(prev, { events: (cur.events ?? []).filter((e) => e.id !== id) });
+        }),
+      addInvestment: (partial) => {
+        const investment: Investment = {
+          ...partial,
+          id: partial.id || uid("inv"),
+          createdAt: partial.createdAt || todayIso(),
+        };
+        commit((prev) => {
+          const cur = activeOf(prev);
+          return patchActive(prev, { investments: [...(cur.investments ?? []), investment] });
+        });
+        return investment;
+      },
+      updateInvestment: (id, patch) =>
+        commit((prev) => {
+          const cur = activeOf(prev);
+          return patchActive(prev, {
+            investments: (cur.investments ?? []).map((i) => (i.id === id ? { ...i, ...patch } : i)),
+          });
+        }),
+      removeInvestment: (id) =>
+        commit((prev) => {
+          const cur = activeOf(prev);
+          return patchActive(prev, {
+            investments: (cur.investments ?? []).filter((i) => i.id !== id),
+            investmentMovements: (cur.investmentMovements ?? []).filter((m) => m.investmentId !== id),
+          });
+        }),
+      addInvestmentMovement: (partial) => {
+        const move: InvestmentMovement = {
+          ...partial,
+          id: partial.id || uid("imov"),
+          createdAt: partial.createdAt || todayIso(),
+        };
+        commit((prev) => {
+          const cur = activeOf(prev);
+          return patchActive(prev, {
+            investmentMovements: [...(cur.investmentMovements ?? []), move].sort((a, b) =>
+              a.data.localeCompare(b.data),
+            ),
+          });
+        });
+        return move;
+      },
+      removeInvestmentMovement: (id) =>
+        commit((prev) => {
+          const cur = activeOf(prev);
+          return patchActive(prev, {
+            investmentMovements: (cur.investmentMovements ?? []).filter((m) => m.id !== id),
+          });
         }),
       addClient: (partial) => {
         const client = createMeiClient(partial);

@@ -16,22 +16,43 @@ export const plans: Record<
   pro: {
     key: "pro",
     name: "PODMEI Pro",
-    who: "Para o MEI cuidar do próprio negócio.",
+    who: "Para o MEI cuidar do essencial do negócio.",
     month: 29.9,
     year: 299,
-    popular: true,
     href: "/app",
     features: [
       "Cadastro da empresa e tipo de atividade",
-      "Cadastro de clientes e fornecedores",
-      "Dashboard com limite de R$ 81 mil",
+      "Clientes, fornecedores, produtos e serviços",
+      "Dashboard enxuto com limite de R$ 81 mil",
       "Lançamentos manuais, texto e áudio",
       "Leitor de extrato PDF e Excel",
       "Contas a receber e a pagar",
       "Recibos em PDF",
-      "DRE, livro-caixa e livro-razão",
-      "Relatório mensal de receitas brutas",
-      "Cálculo do DAS, DASN e folha (1 empregado)",
+      "Livro-caixa e relatório de receitas brutas",
+      "Cálculo do DAS e DASN-SIMEI",
+      "Alertas de limite e DAS mensal",
+      "1 CNPJ",
+    ],
+  },
+  premium: {
+    key: "premium",
+    name: "PODMEI Premium",
+    who: "Para o MEI que quer caixa, investimentos e visão completa.",
+    month: 49.9,
+    year: 499,
+    popular: true,
+    href: "/app",
+    features: [
+      "Tudo do PODMEI Pro",
+      "Dashboard completo e insights",
+      "Investimentos (aporte, resgate e rendimento)",
+      "Fluxo de caixa com gráficos",
+      "Calendário e agendamentos",
+      "Metas de faturamento",
+      "Folha do colaborador",
+      "DRE e livro-razão",
+      "Alertas ricos: falta de caixa, a pagar e a receber",
+      "Lembretes de eventos por e-mail e celular",
       "1 CNPJ",
     ],
   },
@@ -43,7 +64,7 @@ export const plans: Record<
     year: 977,
     href: "/contador",
     features: [
-      "Tudo do PODMEI Pro",
+      "Recursos do PODMEI Premium nos MEIs da carteira",
       "Carteira com vários CNPJs",
       "Troca de MEI ativo",
       "Honorários e status de cada cliente",
@@ -55,9 +76,36 @@ export const plans: Record<
 
 export const PLAN_KEYS = Object.keys(plans) as PlanKey[];
 
+/** Rotas exclusivas do Premium (e Contador/Master). */
+export const PREMIUM_PATH_PREFIXES = [
+  "/app/fluxo-caixa",
+  "/app/investimentos",
+  "/app/calendario",
+  "/app/metas",
+  "/app/folha",
+  "/app/dre",
+  "/app/livro-razao",
+] as const;
+
 export function normalizePlan(plan: unknown): PlanKey {
   if (plan === "contador" || plan === "completo") return "contador";
+  if (plan === "premium") return "premium";
   return "pro";
+}
+
+export function isPremiumPlan(plan: unknown): boolean {
+  return normalizePlan(plan) === "premium";
+}
+
+/** Conta com acesso às funções Premium (assinatura Premium, Contador ou Master). */
+export function hasPremiumAccess(user?: { plan?: string; role?: string } | null): boolean {
+  if (!user) return false;
+  if (user.role === "master" || user.plan === "contador") return true;
+  return isPremiumPlan(user.plan);
+}
+
+export function isPremiumPath(pathname: string): boolean {
+  return PREMIUM_PATH_PREFIXES.some((p) => pathname === p || pathname.startsWith(`${p}/`));
 }
 
 export function planPrice(key: PlanKey, cycle: "month" | "year" = "month") {

@@ -63,7 +63,7 @@ export function MasterAssinaturasPage() {
           username: subscription.email,
           email: subscription.email,
           nome: subscription.nome,
-          role: subscription.plan,
+          role: subscription.plan === "contador" ? "contador" : "pro",
           plan: subscription.plan,
           status: subscription.status === "cancelada" ? "bloqueado" : "ativo",
           mustChangePassword: false,
@@ -233,6 +233,7 @@ export function MasterAssinaturasPage() {
                           onChange={(e) => setDraft({ ...draft, plan: e.target.value as PlanKey })}
                         >
                           <option value="pro">PODMEI Pro</option>
+                          <option value="premium">PODMEI Premium</option>
                           <option value="contador">PODMEI Contador</option>
                         </select>
                       ) : (

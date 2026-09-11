@@ -1,6 +1,7 @@
 import {
   Briefcase,
   Building2,
+  CalendarDays,
   ContactRound,
   FileText,
   Gauge,
@@ -13,7 +14,10 @@ import {
   Scale,
   Shield,
   BookOpen,
+  Target,
+  TrendingUp,
   Users,
+  Wallet,
   X,
 } from "lucide-react";
 import { useMemo, useState } from "react";
@@ -22,10 +26,10 @@ import { Logo } from "@/components/brand/Logo";
 import { ThemeToggle } from "@/components/brand/ThemeToggle";
 import { useAuth } from "@/lib/auth";
 import { useStore } from "@/lib/store";
-import { plans } from "@/lib/plans";
+import { hasPremiumAccess, isPremiumPath, plans } from "@/lib/plans";
 import { cn } from "@/lib/utils";
 
-const links = [
+const allLinks = [
   { to: "/contador", label: "Carteira", icon: Briefcase, end: false },
   { to: "/app", label: "Dashboard", icon: LayoutDashboard, end: true },
   { to: "/app/empresa", label: "Empresa", icon: Building2, end: false },
@@ -35,6 +39,10 @@ const links = [
   { to: "/app/extrato", label: "Extrato bancário", icon: Landmark, end: false },
   { to: "/app/recibos", label: "Recibos", icon: Receipt, end: false },
   { to: "/app/contas", label: "A receber / pagar", icon: Scale, end: false },
+  { to: "/app/fluxo-caixa", label: "Fluxo de caixa", icon: Wallet, end: false },
+  { to: "/app/investimentos", label: "Investimentos", icon: TrendingUp, end: false },
+  { to: "/app/calendario", label: "Calendário", icon: CalendarDays, end: false },
+  { to: "/app/metas", label: "Metas", icon: Target, end: false },
   { to: "/app/folha", label: "Folha", icon: Users, end: false },
   { to: "/app/relatorios", label: "Relatórios", icon: FileText, end: false },
   { to: "/app/limites", label: "Limites", icon: Gauge, end: false },
@@ -51,7 +59,8 @@ const reportPaths = [
   "/app/irpf",
 ];
 
-const mobilePrimary = ["/app", "/app/lancamentos", "/app/contas", "/app/relatorios", "/app/limites"] as const;
+const mobilePrimaryPro = ["/app", "/app/lancamentos", "/app/contas", "/app/limites", "/app/relatorios"] as const;
+const mobilePrimaryPremium = ["/app", "/app/lancamentos", "/app/contas", "/app/fluxo-caixa", "/app/calendario"] as const;
 
 export function AppShell() {
   const { plan, company, clients, activeClientId, selectClient } = useStore();
@@ -61,21 +70,26 @@ export function AppShell() {
   const [menuOpen, setMenuOpen] = useState(false);
   const isMaster = user?.role === "master";
   const isContador = user?.plan === "contador" || isMaster;
+  const premium = hasPremiumAccess(user);
   const carteiraTo = "/contador";
-  const nav = isContador
-    ? links.map((link) =>
-        link.to === "/contador"
-          ? { ...link, to: carteiraTo, label: isMaster ? "Carteira Contador" : link.label }
-          : link,
-      )
-    : links.filter((link) => link.to !== "/contador");
+  const links = useMemo(() => {
+    const base = isContador
+      ? allLinks.map((link) =>
+          link.to === "/contador"
+            ? { ...link, to: carteiraTo, label: isMaster ? "Carteira Contador" : link.label }
+            : link,
+        )
+      : allLinks.filter((link) => link.to !== "/contador");
+    if (premium) return base;
+    return base.filter((link) => !isPremiumPath(link.to));
+  }, [isContador, isMaster, premium]);
 
   const tabs = useMemo(() => {
-    const primary = mobilePrimary
-      .map((to) => nav.find((l) => l.to === to))
-      .filter(Boolean) as typeof nav;
+    const primary = (premium ? mobilePrimaryPremium : mobilePrimaryPro)
+      .map((to) => links.find((l) => l.to === to))
+      .filter(Boolean) as typeof links;
     return primary;
-  }, [nav]);
+  }, [links, premium]);
 
   function linkActive(to: string, end?: boolean) {
     if (to === "/app/relatorios") return reportPaths.includes(pathname);
@@ -95,7 +109,7 @@ export function AppShell() {
           <Logo to="/app" />
         </div>
         <nav className="flex flex-1 flex-col gap-1 px-3">
-          {nav.map((link) => (
+          {links.map((link) => (
             <NavLink
               key={link.to}
               to={link.to}
@@ -258,7 +272,7 @@ export function AppShell() {
             <nav className="flex-1 overflow-y-auto px-3 py-3">
               <p className="mb-2 px-2 text-[11px] font-semibold uppercase tracking-wider text-mute">Menu</p>
               <div className="flex flex-col gap-1">
-                {nav.map((link) => (
+                {links.map((link) => (
                   <NavLink
                     key={link.to}
                     to={link.to}

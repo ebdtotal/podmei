@@ -53,13 +53,17 @@ function pay_site_url(): string {
 }
 function pay_plan_price(string $plan, string $cycle, bool $test = false): float {
   if ($test || $plan === "teste") return 2.0;
-  $prices = ["pro" => ["month" => 49.9, "year" => 499.0], "contador" => ["month" => 99.9, "year" => 999.0]];
+  $prices = [
+    "pro" => ["month" => 29.9, "year" => 299.0],
+    "premium" => ["month" => 49.9, "year" => 499.0],
+    "contador" => ["month" => 97.9, "year" => 977.0],
+  ];
   if (!isset($prices[$plan])) $plan = "pro";
   return $cycle === "year" ? $prices[$plan]["year"] : $prices[$plan]["month"];
 }
 function pay_plan_title(string $plan, string $cycle, bool $test = false): string {
   if ($test || $plan === "teste") return "Teste PODMEI R$ 2,00";
-  $name = $plan === "contador" ? "PODMEI Contador" : "PODMEI Pro";
+  $name = $plan === "contador" ? "PODMEI Contador" : ($plan === "premium" ? "PODMEI Premium" : "PODMEI Pro");
   return $name . " — " . ($cycle === "year" ? "anual" : "mensal");
 }
 function pay_db(): PDO { return podmei_db(); }
@@ -221,7 +225,7 @@ function pay_iniciar_assinatura(array $in): array {
   $telefone = trim((string) ($in["telefone"] ?? ""));
   $cnpj = trim((string) ($in["cnpj"] ?? ""));
   $empresa = trim((string) ($in["empresa"] ?? ""));
-  $plan = ($in["plan"] ?? "") === "contador" ? "contador" : "pro";
+  $plan = ($in["plan"] ?? "") === "contador" ? "contador" : (($in["plan"] ?? "") === "premium" ? "premium" : "pro");
   $cycle = ($in["cycle"] ?? "") === "year" ? "year" : "month";
   $isTest = !empty($in["test"]) || ($in["plan"] ?? "") === "teste" || ($in["action"] ?? "") === "checkout-test";
   if ($nome === "") pay_json_err("Informe o nome completo.");
@@ -407,7 +411,9 @@ function pay_ativar_signup(string $signupId, string $paymentId): array {
   $temp = pay_senha();
   $email = strtolower(trim((string) $row["email"]));
   $username = $email;
-  $plan = (($row["plan"] ?? "") === "contador") ? "contador" : "pro";
+  $rawPlan = (string) ($row["plan"] ?? "pro");
+  $plan = in_array($rawPlan, ["pro", "premium", "contador"], true) ? $rawPlan : "pro";
+  $role = $plan === "contador" ? "contador" : "pro";
   $cycle = (($row["cycle"] ?? "") === "year") ? "year" : "month";
   $amount = floatval($row["amount"]);
   $hash = password_hash($temp, PASSWORD_DEFAULT);
@@ -429,7 +435,7 @@ function pay_ativar_signup(string $signupId, string $paymentId): array {
     $userId = (string) $u["id"];
     $username = (string) $u["username"];
     $pdo->prepare("UPDATE users SET password_hash=?, status='ativo', must_change_password=0, nome=?, telefone=?, cnpj=?, empresa=?, plan=?, role=? WHERE id=?")
-      ->execute([$hash, $row["nome"], $row["telefone"] ?? "", $row["cnpj"] ?? "", $row["empresa"] ?? "", $plan, $plan, $userId]);
+      ->execute([$hash, $row["nome"], $row["telefone"] ?? "", $row["cnpj"] ?? "", $row["empresa"] ?? "", $plan, $role, $userId]);
   } else {
     $userId = pay_uid("usr");
     // evita username duplicado
@@ -438,7 +444,7 @@ function pay_ativar_signup(string $signupId, string $paymentId): array {
     if ($chk->fetch()) $username = preg_replace("/@.*/", "", $email) . substr($signupId, -4);
     $pdo->prepare("INSERT INTO users (id,username,email,nome,password_hash,role,plan,status,must_change_password,telefone,cnpj,empresa,created_at)
       VALUES (?,?,?,?,?,?,?,?,0,?,?,?,?)")->execute([
-      $userId, $username, $email, $row["nome"], $hash, $plan, $plan, "ativo",
+      $userId, $username, $email, $row["nome"], $hash, $role, $plan, "ativo",
       $row["telefone"] ?? "", $row["cnpj"] ?? "", $row["empresa"] ?? "", $now,
     ]);
   }
@@ -509,11 +515,21 @@ function pay_ativar_signup(string $signupId, string $paymentId): array {
  */
 function pay_criar_conta_teste(array $in = []): array {
   $pdo = pay_db();
-  $plan = (($in["plan"] ?? "") === "pro") ? "pro" : "contador";
-  $email = strtolower(trim((string) ($in["email"] ?? ($plan === "contador" ? "contador.teste@podmei.com" : "pro.teste@podmei.com"))));
-  $username = trim((string) ($in["username"] ?? $email));
-  $nome = trim((string) ($in["nome"] ?? ($plan === "contador" ? "Contador Teste PODMEI" : "Pro Teste PODMEI")));
-  $password = (string) ($in["password"] ?? "Contador@Teste26");
+  $rawPlan = (string) ($in["plan"] ?? "pro");
+  $plan = in_array($rawPlan, ["pro", "premium", "contador"], true) ? $rawPlan : "pro";
+  $role = $plan === "contador" ? "contador" : "pro";
+  $defaultEmail =
+    $plan === "contador"
+      ? "contador.teste@podmei.com"
+      : ($plan === "premium" ? "premium.demo@podmei.com" : "pro.teste@podmei.com");
+  $defaultNome =
+    $plan === "contador"
+      ? "Contador Teste PODMEI"
+      : ($plan === "premium" ? "Premium Demo PODMEI" : "Pro Teste PODMEI");
+  $email = strtolower(trim((string) ($in["email"] ?? $defaultEmail)));
+  $username = trim((string) ($in["username"] ?? ($plan === "premium" ? "premium.demo" : $email)));
+  $nome = trim((string) ($in["nome"] ?? $defaultNome));
+  $password = (string) ($in["password"] ?? ($plan === "premium" ? "Premium@Teste26" : "Contador@Teste26"));
   if (strlen($password) < 8) pay_json_err("Senha de teste precisa ter pelo menos 8 caracteres.");
   if (!pay_email_ok($email)) pay_json_err("E-mail de teste inválido.");
   if ($username === "") $username = $email;
@@ -537,7 +553,7 @@ function pay_criar_conta_teste(array $in = []): array {
     $userId = (string) $u["id"];
     $username = (string) $u["username"];
     $pdo->prepare("UPDATE users SET password_hash=?, status='ativo', must_change_password=0, nome=?, plan=?, role=?, email=? WHERE id=?")
-      ->execute([$hash, $nome, $plan, $plan, $email, $userId]);
+      ->execute([$hash, $nome, $plan, $role, $email, $userId]);
   } else {
     $userId = pay_uid("usr");
     $chk = $pdo->prepare("SELECT id FROM users WHERE lower(username) = lower(?)");
@@ -545,7 +561,7 @@ function pay_criar_conta_teste(array $in = []): array {
     if ($chk->fetch()) $username = preg_replace("/@.*/", "", $email) . "_teste";
     $pdo->prepare("INSERT INTO users (id,username,email,nome,password_hash,role,plan,status,must_change_password,telefone,cnpj,empresa,created_at)
       VALUES (?,?,?,?,?,?,?,?,0,?,?,?,?)")->execute([
-      $userId, $username, $email, $nome, $hash, $plan, $plan, "ativo", "", "", "Escritório Teste", $now,
+      $userId, $username, $email, $nome, $hash, $role, $plan, "ativo", "", "", $plan === "premium" ? "MEI Demo Premium" : "Escritório Teste", $now,
     ]);
   }
 

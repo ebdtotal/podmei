@@ -189,7 +189,10 @@ export function DasPage() {
           <p className={cn("mt-1 text-sm font-semibold", atrasados ? "text-red" : "text-green")}>
             {atrasados ? `${atrasados} em atraso` : "Nenhuma competência atrasada"}
           </p>
-          <p className="mt-3 text-xs text-mute">CNPJ {company.cnpj}. Vencimento todo dia 20 do mês seguinte.</p>
+          <p className="mt-3 text-xs text-mute">
+            CNPJ {company.cnpj}. Vencimento todo dia 20 do mês seguinte (ou próximo dia útil se cair em sábado, domingo ou
+            feriado nacional).
+          </p>
           {year < currentYear() ? (
             <p className="mt-2 text-xs text-mute">
               Exercício anterior não gera aviso de atraso. Você pode lançar ou alterar o pagamento se quiser o histórico.

@@ -1,9 +1,12 @@
-import { FileSpreadsheet, Landmark, Receipt, Stamp, Users } from "lucide-react";
+import { CalendarDays, FileSpreadsheet, Landmark, Receipt, Stamp, Target, TrendingUp, Users, Wallet } from "lucide-react";
 import { Link } from "react-router-dom";
 import { useState } from "react";
 import { AlertBanners } from "@/components/alerts/AlertBanners";
-import { buildAlerts, dismissAlert, dismissedAlertIds } from "@/lib/alerts";
+import { TrendLines } from "@/components/charts/CashBars";
+import { buildAlerts, dismissAlert, dismissedAlertIds, filterAlertsForPlan } from "@/lib/alerts";
+import { useAuth } from "@/lib/auth";
 import { hasActiveEmployee } from "@/lib/folha";
+import { averageTicket, goalProgress, topClients, trendMonths } from "@/lib/insights";
 import {
   dasnSummary,
   irpfSplit,
@@ -16,11 +19,14 @@ import {
   totalRevenue,
   yearEntries,
 } from "@/lib/mei";
+import { hasPremiumAccess } from "@/lib/plans";
 import { useStore } from "@/lib/store";
 import { MONTHS, MONTHS_SHORT } from "@/lib/types";
-import { cn, currentYear, formatMoney, formatPercent } from "@/lib/utils";
+import { cn, currentYear, formatMoney, formatPercent, monthIndex, todayIso } from "@/lib/utils";
 
 export function DashboardPage() {
+  const { user } = useAuth();
+  const premium = hasPremiumAccess(user);
   const { company, entries, employee, payrolls, clients, activeClientId } = useStore();
   const [dismissed, setDismissed] = useState(() => dismissedAlertIds());
   const shared = clients.find((c) => c.id === activeClientId)?.sharedInviteId;
@@ -44,6 +50,18 @@ export function DashboardPage() {
   const ir = irpfSplit(yearList);
   const dasn = dasnSummary(yearList);
   const current = series[month];
+  const ticket = averageTicket(entries, year, monthIndex(todayIso()));
+  const ticketYear = averageTicket(entries, year);
+  const tops = topClients(entries, year, 5);
+  const trend = trendMonths(entries, 12);
+  const metaMes = goalProgress(
+    totalRevenue(yearList.filter((e) => monthIndex(e.data) === monthIndex(todayIso()))),
+    company.metaFaturamentoMes || 0,
+  );
+  const dashAlerts = filterAlertsForPlan(
+    buildAlerts(company, entries, undefined, { employee, payrolls }).filter((alert) => !dismissed.has(alert.id)),
+    premium,
+  );
 
   return (
     <div className="space-y-6">
@@ -53,6 +71,7 @@ export function DashboardPage() {
           <h1 className="font-display text-3xl text-ink">{company.nome}</h1>
           <p className="text-sm text-mute">
             {company.cnpj} · {company.cidade}/{company.uf}
+            {!premium ? " · Plano Pro" : " · Plano Premium"}
           </p>
         </div>
         <Link to="/app/relatorio-oficial" className="btn-primary">
@@ -67,20 +86,37 @@ export function DashboardPage() {
       ) : null}
 
       <AlertBanners
-        alerts={buildAlerts(company, entries, undefined, { employee, payrolls }).filter((alert) => !dismissed.has(alert.id))}
+        alerts={dashAlerts}
         onDismiss={(id) => {
           dismissAlert(id);
           setDismissed(dismissedAlertIds());
         }}
       />
 
-      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
-        <Shortcut to="/app/das" color="bg-orange" icon={Stamp} label="Emitir DAS mensal" />
-        <Shortcut to="/app/dasn" color="bg-blue" icon={FileSpreadsheet} label="Declaração anual" />
-        <Shortcut to="/app/folha" color="bg-navy" icon={Users} label="Folha do colaborador" />
-        <Shortcut to="/app/extrato" color="bg-green" icon={Landmark} label="Ler extrato bancário" />
-        <Shortcut to="/app/nfse" color="bg-navy-2" icon={Receipt} label="Emissão nota fiscal" />
-      </div>
+      {premium ? (
+        <>
+          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
+            <Shortcut to="/app/das" color="bg-orange" icon={Stamp} label="Emitir DAS mensal" />
+            <Shortcut to="/app/dasn" color="bg-blue" icon={FileSpreadsheet} label="Declaração anual" />
+            <Shortcut to="/app/fluxo-caixa" color="bg-navy" icon={Wallet} label="Fluxo de caixa" />
+            <Shortcut to="/app/calendario" color="bg-green" icon={CalendarDays} label="Calendário" />
+            <Shortcut to="/app/metas" color="bg-navy-2" icon={Target} label="Metas" />
+          </div>
+          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+            <Shortcut to="/app/folha" color="bg-navy" icon={Users} label="Folha do colaborador" />
+            <Shortcut to="/app/extrato" color="bg-green" icon={Landmark} label="Ler extrato bancário" />
+            <Shortcut to="/app/nfse" color="bg-navy-2" icon={Receipt} label="Emissão nota fiscal" />
+            <Shortcut to="/app/relatorios" color="bg-blue" icon={TrendingUp} label="Relatórios" />
+          </div>
+        </>
+      ) : (
+        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+          <Shortcut to="/app/das" color="bg-orange" icon={Stamp} label="Emitir DAS mensal" />
+          <Shortcut to="/app/limites" color="bg-navy" icon={TrendingUp} label="Limites do MEI" />
+          <Shortcut to="/app/extrato" color="bg-green" icon={Landmark} label="Ler extrato bancário" />
+          <Shortcut to="/app/relatorios" color="bg-blue" icon={FileSpreadsheet} label="Relatórios" />
+        </div>
+      )}
 
       <section className="overflow-hidden rounded-3xl text-white shadow-sm" style={{ background: "linear-gradient(135deg, #7B2CF5, #2563EB)" }}>
         <div className="flex flex-wrap items-center justify-between gap-2 px-5 py-3">
@@ -97,6 +133,65 @@ export function DashboardPage() {
           Lucro líquido {formatMoney(current.lucro)}
         </div>
       </section>
+
+      {premium ? (
+      <section className="rounded-2xl border border-line bg-paper p-4">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <h2 className="text-sm font-semibold">Visão avançada</h2>
+          <Link to="/app/fluxo-caixa" className="text-xs font-semibold text-navy">
+            Abrir fluxo de caixa
+          </Link>
+        </div>
+        <div className="mt-3 grid gap-3 sm:grid-cols-3">
+          <div className="rounded-xl bg-bg px-3 py-3">
+            <p className="text-xs text-mute">Ticket médio do mês</p>
+            <p className="font-display text-xl">{formatMoney(ticket.ticket)}</p>
+            <p className="text-[11px] text-mute">{ticket.count} venda{ticket.count === 1 ? "" : "s"}</p>
+          </div>
+          <div className="rounded-xl bg-bg px-3 py-3">
+            <p className="text-xs text-mute">Ticket médio {year}</p>
+            <p className="font-display text-xl">{formatMoney(ticketYear.ticket)}</p>
+            <p className="text-[11px] text-mute">{ticketYear.count} venda{ticketYear.count === 1 ? "" : "s"}</p>
+          </div>
+          <div className="rounded-xl bg-bg px-3 py-3">
+            <p className="text-xs text-mute">Meta do mês</p>
+            <p className="font-display text-xl">{metaMes.meta ? `${metaMes.pct}%` : "—"}</p>
+            <p className="text-[11px] text-mute">
+              {metaMes.meta ? `${formatMoney(metaMes.atual)} de ${formatMoney(metaMes.meta)}` : "Defina em Metas"}
+            </p>
+          </div>
+        </div>
+        <div className="mt-4">
+          <TrendLines series={trend} />
+        </div>
+        <div className="mt-4">
+          <h3 className="text-xs font-semibold uppercase tracking-wide text-mute">Top clientes {year}</h3>
+          {!tops.length ? (
+            <p className="mt-2 text-sm text-mute">Sem vendas suficientes para ranquear.</p>
+          ) : (
+            <ul className="mt-2 divide-y divide-line">
+              {tops.map((c) => (
+                <li key={`${c.contactId || c.nome}`} className="flex items-center justify-between gap-3 py-2 text-sm">
+                  <span>
+                    {c.nome}
+                    <span className="ml-2 text-xs text-mute">{c.count}×</span>
+                  </span>
+                  <span className="font-semibold">{formatMoney(c.total)}</span>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+      </section>
+      ) : (
+        <p className="rounded-2xl border border-line bg-paper px-4 py-3 text-sm text-mute">
+          Dashboard enxuto do Pro. Fluxo de caixa, metas, investimentos e visão avançada estão no{" "}
+          <Link to="/assinar/premium" className="font-semibold text-navy">
+            Premium (R$ 49,90/mês)
+          </Link>
+          .
+        </p>
+      )}
 
       <div className="grid gap-6 xl:grid-cols-[1.1fr_0.9fr]">
         <section className="rounded-2xl border border-line bg-paper p-4">
@@ -135,6 +230,7 @@ export function DashboardPage() {
         </section>
 
         <div className="space-y-4">
+          {premium ? (
           <section className="rounded-2xl border border-line bg-paper p-4">
             <h2 className="text-sm font-semibold">Folha do colaborador</h2>
             {hasActiveEmployee(employee) ? (
@@ -160,6 +256,7 @@ export function DashboardPage() {
               </>
             )}
           </section>
+          ) : null}
 
           <section className="rounded-2xl border border-line bg-paper p-4">
             <h2 className="text-sm font-semibold text-ink">Limites do MEI</h2>

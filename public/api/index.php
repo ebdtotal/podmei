@@ -89,6 +89,7 @@ function pix_payload($config, $amount, $txid) {
 function plan_price($plan, $cycle) {
   $prices = [
     "pro" => ["month" => 29.9, "year" => 299],
+    "premium" => ["month" => 49.9, "year" => 499],
     "contador" => ["month" => 97.9, "year" => 977],
   ];
   if (!isset($prices[$plan])) $plan = "pro";
@@ -967,12 +968,12 @@ try {
         }
         $store["subscriptions"][$i]["status"] = $in["status"];
       }
-      if (isset($in["plan"]) && in_array($in["plan"], ["pro", "contador"], true)) {
+      if (isset($in["plan"]) && in_array($in["plan"], ["pro", "premium", "contador"], true)) {
         $store["subscriptions"][$i]["plan"] = $in["plan"];
         foreach ($store["users"] as $u => $user) {
           if (($user["id"] ?? "") === ($s["userId"] ?? "") && ($user["role"] ?? "") !== "master") {
             $store["users"][$u]["plan"] = $in["plan"];
-            $store["users"][$u]["role"] = $in["plan"];
+            $store["users"][$u]["role"] = $in["plan"] === "contador" ? "contador" : "pro";
           }
         }
       }

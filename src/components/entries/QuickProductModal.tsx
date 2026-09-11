@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { Modal } from "@/components/ui/Modal";
+import { MoneyBrInput } from "@/components/ui/MoneyBrInput";
 import { useStore } from "@/lib/store";
 import type { Product, ProductKind } from "@/lib/types";
 import { todayIso } from "@/lib/utils";
@@ -91,14 +92,7 @@ export function QuickProductModal({
         <div className="grid gap-3 sm:grid-cols-2">
           <label className="block text-xs font-medium text-mute">
             Preço unitário
-            <input
-              className="input mt-1"
-              type="number"
-              min="0"
-              step="0.01"
-              value={preco || ""}
-              onChange={(e) => setPreco(Number(e.target.value))}
-            />
+            <MoneyBrInput className="input mt-1" value={preco} onChange={setPreco} />
           </label>
           <label className="block text-xs font-medium text-mute">
             Unidade

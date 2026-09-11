@@ -61,8 +61,57 @@ export function dasBreakdown(perfil: DasPerfil, year?: number, month = 0) {
   return { inss, icms, iss, total: round2(inss + icms + iss), salarioMinimo: minimo };
 }
 
+/** Domingo de Páscoa (algoritmo gregoriano). */
+function easterSunday(year: number) {
+  const a = year % 19;
+  const b = Math.floor(year / 100);
+  const c = year % 100;
+  const d = Math.floor(b / 4);
+  const e = b % 4;
+  const f = Math.floor((b + 8) / 25);
+  const g = Math.floor((b - f + 1) / 3);
+  const h = (19 * a + b - d - g + 15) % 30;
+  const i = Math.floor(c / 4);
+  const k = c % 4;
+  const l = (32 + 2 * e + 2 * i - h - k) % 7;
+  const m = Math.floor((a + 11 * h + 22 * l) / 451);
+  const month = Math.floor((h + l - 7 * m + 114) / 31);
+  const day = ((h + l - 7 * m + 114) % 31) + 1;
+  return new Date(year, month - 1, day);
+}
+
+/** Feriados nacionais (Lei 662/1949 e alterações; Consciência Negra a partir de 2024). */
+export function isNationalHoliday(date: Date) {
+  const y = date.getFullYear();
+  const md = `${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
+  const fixed = new Set(["01-01", "04-21", "05-01", "09-07", "10-12", "11-02", "11-15", "12-25"]);
+  if (y >= 2024) fixed.add("11-20");
+  if (fixed.has(md)) return true;
+  const goodFriday = easterSunday(y);
+  goodFriday.setDate(goodFriday.getDate() - 2);
+  return isoDate(date) === isoDate(goodFriday);
+}
+
+function isWeekend(date: Date) {
+  const day = date.getDay();
+  return day === 0 || day === 6;
+}
+
+/** Próximo dia útil (pula sábado, domingo e feriado nacional). */
+export function nextBusinessDay(date: Date) {
+  const cur = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+  while (isWeekend(cur) || isNationalHoliday(cur)) {
+    cur.setDate(cur.getDate() + 1);
+  }
+  return cur;
+}
+
+/**
+ * Vencimento do DAS da competência `month` (0–11): dia 20 do mês seguinte.
+ * Se cair em sábado, domingo ou feriado nacional, vai para o próximo dia útil.
+ */
 export function dasDueDate(year: number, month: number) {
-  return isoDate(new Date(year, month + 1, 20));
+  return isoDate(nextBusinessDay(new Date(year, month + 1, 20)));
 }
 
 export function competenceFromDueDate(iso: string) {

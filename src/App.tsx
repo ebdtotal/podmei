@@ -1,5 +1,6 @@
 import { Navigate, Route, Routes } from "react-router-dom";
 import { RequireAuth, RequireMaster } from "./components/auth/RequireAuth";
+import { RequirePremium } from "./components/auth/RequirePremium";
 import { AppShell } from "./components/layout/AppShell";
 import { ContadorShell } from "./components/layout/ContadorShell";
 import { MasterShell } from "./components/layout/MasterShell";
@@ -24,12 +25,16 @@ import { RelatorioOficialPage } from "./pages/app/RelatorioOficialPage";
 import { RelatoriosPage } from "./pages/app/RelatoriosPage";
 import { AssinarRetornoPage } from "./pages/AssinarRetornoPage";
 import { CheckoutPage } from "./pages/CheckoutPage";
+import { CalendarioPage } from "./pages/app/CalendarioPage";
 import { CarteiraPage } from "./pages/contador/CarteiraPage";
 import { ConvitePage } from "./pages/ConvitePage";
 import { EscritorioPage } from "./pages/contador/EscritorioPage";
+import { InvestimentosPage } from "./pages/app/InvestimentosPage";
+import { FluxoCaixaPage } from "./pages/app/FluxoCaixaPage";
 import { LandingPage } from "./pages/LandingPage";
 import { PrivacidadePage, TermosPage } from "./pages/LegalPage";
 import { LoginPage } from "./pages/LoginPage";
+import { MetasPage } from "./pages/app/MetasPage";
 import { MasterAssinaturasPage } from "./pages/master/AssinaturasPage";
 import { MasterClientesPage } from "./pages/master/ClientesPage";
 import { MasterFinanceiroPage } from "./pages/master/FinanceiroPage";
@@ -93,12 +98,65 @@ export default function App() {
         <Route path="extrato" element={<ExtratoPage />} />
         <Route path="recibos" element={<RecibosPage />} />
         <Route path="contas" element={<ContasPage />} />
-        <Route path="folha" element={<FolhaPage />} />
+        <Route
+          path="fluxo-caixa"
+          element={
+            <RequirePremium>
+              <FluxoCaixaPage />
+            </RequirePremium>
+          }
+        />
+        <Route
+          path="investimentos"
+          element={
+            <RequirePremium>
+              <InvestimentosPage />
+            </RequirePremium>
+          }
+        />
+        <Route
+          path="calendario"
+          element={
+            <RequirePremium>
+              <CalendarioPage />
+            </RequirePremium>
+          }
+        />
+        <Route
+          path="metas"
+          element={
+            <RequirePremium>
+              <MetasPage />
+            </RequirePremium>
+          }
+        />
+        <Route
+          path="folha"
+          element={
+            <RequirePremium>
+              <FolhaPage />
+            </RequirePremium>
+          }
+        />
         <Route path="relatorios" element={<RelatoriosPage />} />
         <Route path="relatorio-oficial" element={<RelatorioOficialPage />} />
-        <Route path="dre" element={<DrePage />} />
+        <Route
+          path="dre"
+          element={
+            <RequirePremium>
+              <DrePage />
+            </RequirePremium>
+          }
+        />
         <Route path="livro-caixa" element={<LivroCaixaPage />} />
-        <Route path="livro-razao" element={<LivroRazaoPage />} />
+        <Route
+          path="livro-razao"
+          element={
+            <RequirePremium>
+              <LivroRazaoPage />
+            </RequirePremium>
+          }
+        />
         <Route path="limites" element={<LimitesPage />} />
         <Route path="whatsapp" element={<Navigate to="/app" replace />} />
         <Route path="das" element={<DasPage />} />

@@ -64,13 +64,14 @@ if (!seed_authorized($in)) {
   pay_json_err("Não autorizado. Use key de seed ou token master.", 401);
 }
 
-$plan = (($in["plan"] ?? $_GET["plan"] ?? "") === "pro") ? "pro" : "contador";
+$rawPlan = (string) ($in["plan"] ?? $_GET["plan"] ?? "pro");
+$plan = in_array($rawPlan, ["pro", "premium", "contador"], true) ? $rawPlan : "pro";
 $out = pay_criar_conta_teste([
   "plan" => $plan,
   "email" => $in["email"] ?? $_GET["email"] ?? null,
   "username" => $in["username"] ?? $_GET["username"] ?? null,
   "nome" => $in["nome"] ?? $_GET["nome"] ?? null,
-  "password" => $in["password"] ?? $_GET["password"] ?? "Contador@Teste26",
+  "password" => $in["password"] ?? $_GET["password"] ?? ($plan === "premium" ? "Premium@Teste26" : "Contador@Teste26"),
 ]);
 
 pay_json_ok($out);

@@ -1,3 +1,4 @@
+import { weekShortfallAlerts, upcomingDues } from "./cashflow";
 import { dasBreakdown, dasCompetenceKey, dasDueDate, dasPaidMap, resolveDasPerfil } from "./das";
 import {
   calcPayroll,
@@ -14,7 +15,7 @@ import { formatDate, formatMoney, todayIso } from "./utils";
 
 export type AppAlert = {
   id: string;
-  kind: "das" | "limite" | "folha";
+  kind: "das" | "limite" | "folha" | "caixa" | "contas";
   level: "warn" | "danger";
   title: string;
   body: string;
@@ -110,6 +111,37 @@ export function buildAlerts(
 
   if (labor && hasActiveEmployee(labor.employee)) {
     alerts.push(...laborAlerts(labor.employee, labor.payrolls, today));
+  }
+
+  for (const week of weekShortfallAlerts(entries, today)) {
+    alerts.push({
+      id: week.id,
+      kind: "caixa",
+      level: "danger",
+      title: `Vai faltar caixa na semana de ${formatDate(week.start)}`,
+      body: `${nome}: o saldo projetado fica negativo até ${formatDate(week.end)} (cerca de ${formatMoney(week.saldo)}). Revise entradas, a receber e a pagar.`,
+      href: "/app/fluxo-caixa",
+    });
+  }
+
+  const remindDays = Math.max(1, Math.min(30, company.lembreteContasDias ?? 3));
+  for (const { entry, due } of upcomingDues(entries, remindDays, today)) {
+    const receive = entry.status === "a_receber";
+    const days = daysBetween(today, due);
+    alerts.push({
+      id: `contas:${entry.id}:${due}`,
+      kind: "contas",
+      level: days === 0 ? "danger" : "warn",
+      title: receive
+        ? days === 0
+          ? `Receber hoje · ${entry.contraparte || "cliente"}`
+          : `A receber em ${days} dia${days === 1 ? "" : "s"}`
+        : days === 0
+          ? `Pagar hoje · ${entry.contraparte || "fornecedor"}`
+          : `A pagar em ${days} dia${days === 1 ? "" : "s"}`,
+      body: `${formatMoney(entry.valor)} · vence ${formatDate(due)}. ${entry.descricao || ""}`.trim(),
+      href: "/app/contas",
+    });
   }
 
   return alerts;
@@ -241,3 +273,10 @@ export function visibleAlerts(alerts: AppAlert[]) {
   const gone = dismissedAlertIds();
   return alerts.filter((alert) => !gone.has(alert.id));
 }
+
+/** Pro: só limite e DAS. Premium/Contador: todos os kinds. */
+export function filterAlertsForPlan(alerts: AppAlert[], premium: boolean): AppAlert[] {
+  if (premium) return alerts;
+  return alerts.filter((a) => a.kind === "das" || a.kind === "limite");
+}
+

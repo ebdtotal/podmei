@@ -1,7 +1,27 @@
 import { BookMarked, BookOpen, FileSpreadsheet, FileText, Receipt, Stamp, Users } from "lucide-react";
 import { Link } from "react-router-dom";
+import { useAuth } from "@/lib/auth";
+import { hasPremiumAccess, isPremiumPath } from "@/lib/plans";
 
 const cards = [
+  {
+    to: "/app/fluxo-caixa",
+    icon: FileSpreadsheet,
+    title: "Fluxo de caixa",
+    text: "Entradas, saídas, a receber/pagar e saldo projetado com gráficos.",
+  },
+  {
+    to: "/app/calendario",
+    icon: FileText,
+    title: "Calendário financeiro",
+    text: "Vencimentos de a receber e a pagar por dia.",
+  },
+  {
+    to: "/app/metas",
+    icon: Receipt,
+    title: "Metas",
+    text: "Faturamento do mês e do ano versus meta e limite do MEI.",
+  },
   {
     to: "/app/relatorio-oficial",
     icon: FileSpreadsheet,
@@ -53,17 +73,22 @@ const cards = [
 ];
 
 export function RelatoriosPage() {
+  const { user } = useAuth();
+  const premium = hasPremiumAccess(user);
+  const visible = cards.filter((card) => premium || !isPremiumPath(card.to));
+
   return (
     <div className="space-y-6">
       <div>
         <h1 className="font-display text-3xl text-ink">Relatórios e obrigações</h1>
         <p className="mt-1 text-sm text-mute">
-          DRE, livros, receitas brutas, DAS, IRPF, declaração anual e folha do colaborador. O limite de faturamento fica na
-          aba Limites.
+          {premium
+            ? "DRE, livros, receitas brutas, DAS, IRPF, declaração anual e folha do colaborador."
+            : "Livro-caixa, receitas brutas, DAS, DASN e IRPF. Fluxo, DRE, razão, metas, calendário e folha no Premium."}
         </p>
       </div>
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-        {cards.map((card) => (
+        {visible.map((card) => (
           <Link
             key={card.to}
             to={card.to}
@@ -75,6 +100,15 @@ export function RelatoriosPage() {
           </Link>
         ))}
       </div>
+      {!premium ? (
+        <p className="rounded-2xl border border-line bg-paper px-4 py-3 text-sm text-mute">
+          Quer DRE, livro-razão, fluxo de caixa e folha?{" "}
+          <Link to="/assinar/premium" className="font-semibold text-navy">
+            Assine o Premium
+          </Link>
+          .
+        </p>
+      ) : null}
     </div>
   );
 }

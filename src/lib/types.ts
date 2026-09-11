@@ -26,7 +26,7 @@ export type DasPerfil = "comercio" | "servicos" | "misto" | "caminhoneiro" | "ca
 
 export type PixTipo = "cnpj" | "cpf" | "telefone" | "email" | "copia_e_cola";
 
-export type PlanKey = "pro" | "contador";
+export type PlanKey = "pro" | "premium" | "contador";
 
 export type BillingCycle = "month" | "year";
 
@@ -52,6 +52,12 @@ export interface Company {
   instagram?: string;
   /** Chave Pix do MEI — usada na cobrança de contas a receber. */
   pixChave?: string;
+  /** Meta de faturamento do mês (R$). */
+  metaFaturamentoMes?: number;
+  /** Meta de faturamento do ano (R$). */
+  metaFaturamentoAno?: number;
+  /** Dias de antecedência para lembrete de a receber/pagar. */
+  lembreteContasDias?: number;
 }
 
 export interface Contact {
@@ -104,6 +110,10 @@ export interface Entry {
   precoUnitario?: number;
   descontoTipo?: DiscountKind;
   descontoValor?: number;
+  /** Agrupa parcelas de uma série (recorrente / parcelado). */
+  seriesId?: string;
+  /** Tipo da série, para ações como parar recorrência. */
+  seriesKind?: "recorrente" | "parcelado";
 }
 
 export interface WhatsAppMessage {
@@ -170,6 +180,42 @@ export interface PayrollRun {
   createdAt: string;
 }
 
+export interface CalendarEvent {
+  id: string;
+  /** Data do evento (ISO yyyy-mm-dd). */
+  date: string;
+  title: string;
+  note?: string;
+  valor?: number;
+  createdAt: string;
+}
+
+export type InvestmentYieldKind = "pre" | "pos_cdi";
+export type InvestmentMoveKind = "aporte" | "resgate" | "rendimento";
+
+/** Posição / produto de investimento (CDB, RDB, etc.). */
+export interface Investment {
+  id: string;
+  nome: string;
+  instituicao: string;
+  yieldKind: InvestmentYieldKind;
+  /** Pré: % a.a. | Pós: % do CDI (ex.: 100 = 100% do CDI). */
+  taxa: number;
+  prazoDias?: number;
+  vencimento?: string;
+  createdAt: string;
+}
+
+export interface InvestmentMovement {
+  id: string;
+  investmentId: string;
+  kind: InvestmentMoveKind;
+  data: string;
+  valor: number;
+  observacao?: string;
+  createdAt: string;
+}
+
 export interface MeiClient {
   id: string;
   status: MeiStatus;
@@ -185,6 +231,10 @@ export interface MeiClient {
   payrolls?: PayrollRun[];
   contacts?: Contact[];
   products?: Product[];
+  /** Agendamentos manuais do calendário. */
+  events?: CalendarEvent[];
+  investments?: Investment[];
+  investmentMovements?: InvestmentMovement[];
   /** Convite aceito: cópia do MEI na carteira do contador. */
   sharedInviteId?: string;
 }

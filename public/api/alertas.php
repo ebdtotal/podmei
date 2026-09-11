@@ -203,7 +203,7 @@ function alert_workspace_clients(array $ws): array {
 }
 
 /** @return list<array{key:string,subject:string,body:string}> */
-function alert_compute_for_client(array $client, string $today): array {
+function alert_compute_for_client(array $client, string $today, bool $premium = false): array {
   $company = is_array($client["company"] ?? null) ? $client["company"] : [];
   $entries = is_array($client["entries"] ?? null) ? $client["entries"] : [];
   $nome = trim((string) ($company["nome"] ?? "sua empresa"));
@@ -293,18 +293,46 @@ function alert_compute_for_client(array $client, string $today): array {
     "comprou",
     "do teto de compras (80% do limite proporcional)"
   ));
+
+  // Premium: lembrete de eventos/agendamentos no dia (e-mail a partir das 06h, via cron ou app).
+  if ($premium) {
+    date_default_timezone_set("America/Sao_Paulo");
+    $hour = (int) date("G");
+    if ($hour >= 6) {
+      $events = is_array($client["events"] ?? null) ? $client["events"] : [];
+      foreach ($events as $ev) {
+        if (!is_array($ev)) continue;
+        $date = (string) ($ev["date"] ?? "");
+        if ($date !== $today) continue;
+        $eid = (string) ($ev["id"] ?? "");
+        if ($eid === "") continue;
+        $title = trim((string) ($ev["title"] ?? "Evento"));
+        if ($title === "") $title = "Evento";
+        $note = trim((string) ($ev["note"] ?? ""));
+        $valor = (float) ($ev["valor"] ?? 0);
+        $extra = $note !== "" ? "\n\nObservação: {$note}" : "";
+        if ($valor > 0) $extra .= "\nValor: " . alert_money($valor);
+        $out[] = [
+          "key" => "evento:{$eid}:{$date}",
+          "subject" => "Lembrete: {$title} — {$nome} — PODMEI",
+          "body" => "Olá,\n\nHoje (" . alert_date($date) . ") você tem o agendamento \"{$title}\" no calendário do PODMEI.{$extra}\n\nVeja no app:\nhttps://podmei.com/app/calendario\n\nPODMEI",
+        ];
+      }
+    }
+  }
+
   return $out;
 }
 
 /** @return list<array{key:string,subject:string,body:string}> */
-function alert_compute(array $ws, string $today): array {
+function alert_compute(array $ws, string $today, bool $premium = false): array {
   $clients = alert_workspace_clients($ws);
   if (!$clients) return [];
   $multi = count($clients) > 1;
   $out = [];
   foreach ($clients as $client) {
     $cid = (string) ($client["id"] ?? "");
-    foreach (alert_compute_for_client($client, $today) as $item) {
+    foreach (alert_compute_for_client($client, $today, $premium) as $item) {
       if ($multi && $cid !== "") {
         $item["key"] = $cid . ":" . $item["key"];
       }
@@ -316,10 +344,12 @@ function alert_compute(array $ws, string $today): array {
 
 function alert_send_for_user(string $userId): array {
   $pdo = podmei_db();
-  $st = $pdo->prepare("SELECT email FROM users WHERE id = ? LIMIT 1");
+  $st = $pdo->prepare("SELECT email, plan FROM users WHERE id = ? LIMIT 1");
   $st->execute([$userId]);
   $user = $st->fetch();
   $email = strtolower(trim((string) ($user["email"] ?? "")));
+  $plan = strtolower(trim((string) ($user["plan"] ?? "pro")));
+  $premium = $plan === "premium" || $plan === "contador";
   $row = podmei_get_workspace($userId);
   $ws = is_array($row["workspace"] ?? null) ? $row["workspace"] : null;
   if (!$ws) return ["sent" => []];
@@ -329,8 +359,10 @@ function alert_send_for_user(string $userId): array {
   if (!filter_var($email, FILTER_VALIDATE_EMAIL)) return ["sent" => []];
 
   $today = date("Y-m-d");
+  date_default_timezone_set("America/Sao_Paulo");
+  $today = date("Y-m-d");
   $sent = [];
-  foreach (alert_compute($ws, $today) as $item) {
+  foreach (alert_compute($ws, $today, $premium) as $item) {
     $chk = $pdo->prepare("SELECT id FROM alert_mails WHERE user_id = ? AND alert_key = ? LIMIT 1");
     $chk->execute([$userId, $item["key"]]);
     if ($chk->fetch()) continue;

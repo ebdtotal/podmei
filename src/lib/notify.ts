@@ -1,8 +1,10 @@
 import { Capacitor } from "@capacitor/core";
 import type { AppAlert } from "./alerts";
+import type { CalendarEvent } from "./types";
 import { todayIso } from "./utils";
 
 const SHOWN = "podmei-alert-shown";
+const EVENT_NOTIF = "podmei-event-notif";
 
 function shownKey(id: string) {
   return `${SHOWN}:${id}:${todayIso()}`;
@@ -77,4 +79,46 @@ export async function notifyAlerts(alerts: AppAlert[]) {
     /* plugin ausente: cai no aviso do navegador */
   }
   await notifyWeb(alerts);
+}
+
+/** Agenda aviso no celular às 06:00 do dia do evento (Premium). */
+export async function scheduleEventMorningNotifications(events: CalendarEvent[]) {
+  if (!Capacitor.isNativePlatform()) return;
+  const upcoming = events.filter((ev) => ev.date >= todayIso());
+  try {
+    const { LocalNotifications } = await import("@capacitor/local-notifications");
+    const perm = await LocalNotifications.checkPermissions();
+    if (perm.display !== "granted") {
+      const asked = await LocalNotifications.requestPermissions();
+      if (asked.display !== "granted") return;
+    }
+
+    const prevRaw = localStorage.getItem(EVENT_NOTIF);
+    const prevIds: number[] = prevRaw ? (JSON.parse(prevRaw) as number[]) : [];
+    if (prevIds.length) {
+      await LocalNotifications.cancel({ notifications: prevIds.map((id) => ({ id })) }).catch(() => undefined);
+    }
+
+    const notifications = upcoming
+      .map((ev) => {
+        const at = new Date(`${ev.date}T06:00:00`);
+        if (at.getTime() <= Date.now()) return null;
+        const id = (Math.abs(hashId(`evt-am:${ev.id}:${ev.date}`)) % 1_900_000_000) + 50_000_000;
+        return {
+          id,
+          title: "Lembrete PODMEI",
+          body: ev.title + (ev.note ? ` — ${ev.note}` : ""),
+          schedule: { at, allowWhileIdle: true },
+          extra: { href: "/app/calendario", eventId: ev.id },
+        };
+      })
+      .filter((n): n is NonNullable<typeof n> => !!n);
+
+    if (notifications.length) {
+      await LocalNotifications.schedule({ notifications });
+    }
+    localStorage.setItem(EVENT_NOTIF, JSON.stringify(notifications.map((n) => n.id)));
+  } catch {
+    /* plugin / permissão */
+  }
 }

@@ -1,8 +1,8 @@
 import type { Contact, DiscountKind, Entry, EntryKind, PaymentMethod, PaymentStatus, RevenueKind } from "./types";
 import { calcEntryTotal } from "./entryPricing";
-import { addDaysIso, parseMoney, todayIso, uid } from "./utils";
+import { addDaysIso, addMonthsOnDay, dueOnDayFrom, parseMoney, todayIso, uid } from "./utils";
 
-export type PagamentoModo = "avista" | "parcelado";
+export type PagamentoModo = "avista" | "parcelado" | "recorrente";
 
 export interface ParsedDraft {
   kind: EntryKind;
@@ -22,12 +22,16 @@ export interface ParsedDraft {
   precoUnitario?: number;
   descontoTipo?: DiscountKind;
   descontoValor?: number;
-  /** À vista (padrão) ou parcelado (gera vários lançamentos). */
+  /** À vista, parcelado ou recorrente mensal. */
   pagamentoModo?: PagamentoModo;
-  /** Quantidade de parcelas do saldo (após a entrada). */
+  /** Parcelas do saldo (parcelado) ou meses da série (recorrente). */
   numParcelas?: number;
   /** Valor pago na entrada (liquidado na data da operação). */
   valorEntrada?: number;
+  /** Dia do mês do vencimento recorrente (1–31). */
+  diaRecorrencia?: number;
+  /** Última data da série recorrente (inclusive). */
+  dataFimRecorrencia?: string;
   confidence: string;
 }
 
@@ -156,11 +160,63 @@ export function draftToEntry(draft: ParsedDraft, source: Entry["source"], valorO
   };
 }
 
+/** Datas mensais do dia `day` de `firstDue` até `endIso` (inclusive), máx. 120. */
+export function recurringDueDates(firstDue: string, endIso: string, dayOfMonth: number): string[] {
+  const day = Math.max(1, Math.min(31, Math.floor(dayOfMonth) || 1));
+  const end = endIso.slice(0, 10);
+  const first = firstDue.slice(0, 10);
+  if (!first || !end || end < first) return [first || end].filter(Boolean);
+  const out: string[] = [];
+  for (let i = 0; i < 120; i++) {
+    const due = addMonthsOnDay(first, i, day);
+    if (due > end) break;
+    out.push(due);
+  }
+  return out.length ? out : [first];
+}
+
 /**
  * À vista → 1 lançamento.
  * Parcelado → entrada liquidada (se > 0) + N contas a receber/pagar iguais a cada 30 dias.
+ * Recorrente → contas a receber (receita) ou a pagar (despesa/compra) no mesmo dia até a data fim.
  */
 export function draftToEntries(draft: ParsedDraft, source: Entry["source"]): Entry[] {
+  if (draft.pagamentoModo === "recorrente") {
+    const dayRaw =
+      draft.diaRecorrencia ||
+      Number((draft.vencimento || draft.data || "").slice(8, 10)) ||
+      1;
+    const day = Math.max(1, Math.min(31, Math.floor(dayRaw)));
+    const firstDue = draft.vencimento || dueOnDayFrom(draft.data, day);
+    const endDue = draft.dataFimRecorrencia || addMonthsOnDay(firstDue, 11, day);
+    const dates = recurringDueDates(firstDue, endDue, day);
+    const pendingStatus: PaymentStatus = draft.kind === "venda" ? "a_receber" : "a_pagar";
+    const baseDesc = (draft.descricao || "").trim();
+    const { liquido } = draftPricing(draft);
+    const seriesId = uid("ser");
+    const n = dates.length;
+
+    return dates.map((vencimento, i) => ({
+      ...draftToEntry(
+        {
+          ...draft,
+          status: pendingStatus,
+          vencimento,
+          descricao: baseDesc ? `${baseDesc} · ${i + 1}/${n}` : `Recorrente ${i + 1}/${n}`,
+          documento: draft.documento ? `${draft.documento} ${i + 1}/${n}` : `${i + 1}/${n}`,
+        },
+        source,
+        liquido,
+      ),
+      quantidade: 1,
+      precoUnitario: liquido,
+      descontoTipo: "reais" as const,
+      descontoValor: 0,
+      seriesId,
+      seriesKind: "recorrente" as const,
+    }));
+  }
+
   if (draft.pagamentoModo !== "parcelado") {
     return [draftToEntry(draft, source)];
   }
@@ -172,6 +228,7 @@ export function draftToEntries(draft: ParsedDraft, source: Entry["source"]): Ent
   const pendingStatus: PaymentStatus = draft.kind === "venda" ? "a_receber" : "a_pagar";
   const firstDue = draft.vencimento || draft.data;
   const baseDesc = (draft.descricao || "").trim();
+  const seriesId = uid("ser");
   const out: Entry[] = [];
 
   if (entrada > 0) {
@@ -190,6 +247,8 @@ export function draftToEntries(draft: ParsedDraft, source: Entry["source"]): Ent
       precoUnitario: entrada,
       descontoTipo: "reais",
       descontoValor: 0,
+      seriesId,
+      seriesKind: "parcelado",
     });
   }
 
@@ -216,10 +275,25 @@ export function draftToEntries(draft: ParsedDraft, source: Entry["source"]): Ent
       precoUnitario: valor,
       descontoTipo: "reais",
       descontoValor: 0,
+      seriesId,
+      seriesKind: "parcelado",
     });
   });
 
   return out;
+}
+
+/** IDs de parcelas futuras em aberto de uma série recorrente (não mexe nas liquidadas). */
+export function futureOpenRecurrenceIds(entries: Entry[], seriesId: string, today = todayIso()) {
+  return entries
+    .filter((e) => {
+      if (e.seriesId !== seriesId) return false;
+      if (e.seriesKind && e.seriesKind !== "recorrente") return false;
+      if (e.status !== "a_receber" && e.status !== "a_pagar") return false;
+      const due = e.vencimento || e.data;
+      return due > today;
+    })
+    .map((e) => e.id);
 }
 
 export function entryToDraft(entry: Entry): ParsedDraft {

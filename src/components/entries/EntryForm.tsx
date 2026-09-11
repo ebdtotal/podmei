@@ -1,6 +1,8 @@
 import { useMemo, useState, type ReactNode } from "react";
 import { QuickContactModal } from "@/components/entries/QuickContactModal";
 import { QuickProductModal } from "@/components/entries/QuickProductModal";
+import { DateBrInput } from "@/components/ui/DateBrInput";
+import { MoneyBrInput } from "@/components/ui/MoneyBrInput";
 import { calcEntryTotal } from "@/lib/entryPricing";
 import type {
   Contact,
@@ -13,9 +15,9 @@ import type {
   ProductKind,
   RevenueKind,
 } from "@/lib/types";
-import { matchContact, parseLancamento, type ParsedDraft } from "@/lib/parser";
+import { matchContact, parseLancamento, recurringDueDates, type PagamentoModo, type ParsedDraft } from "@/lib/parser";
 import { useStore } from "@/lib/store";
-import { formatMoney, todayIso } from "@/lib/utils";
+import { addMonthsOnDay, dueOnDayFrom, formatDate, formatMoney, todayIso } from "@/lib/utils";
 
 const emptyDraft = (): ParsedDraft => ({
   kind: "venda",
@@ -35,6 +37,8 @@ const emptyDraft = (): ParsedDraft => ({
   pagamentoModo: "avista",
   numParcelas: 2,
   valorEntrada: 0,
+  diaRecorrencia: 10,
+  dataFimRecorrencia: "",
   confidence: "",
 });
 
@@ -74,12 +78,18 @@ export function EntryForm({
       pagamentoModo: allowParcelado ? base.pagamentoModo || "avista" : "avista",
       numParcelas: base.numParcelas && base.numParcelas > 0 ? base.numParcelas : 2,
       valorEntrada: base.valorEntrada ?? 0,
+      diaRecorrencia:
+        base.diaRecorrencia && base.diaRecorrencia >= 1 && base.diaRecorrencia <= 31
+          ? base.diaRecorrencia
+          : Number((base.vencimento || base.data || todayIso()).slice(8, 10)) || 10,
+      dataFimRecorrencia: base.dataFimRecorrencia || "",
     };
   });
   const [contactModalOpen, setContactModalOpen] = useState(false);
   const [productModalOpen, setProductModalOpen] = useState(false);
   const parcelado = allowParcelado && draft.pagamentoModo === "parcelado";
-  const pending = isPending(draft.status) || parcelado;
+  const recorrente = allowParcelado && draft.pagamentoModo === "recorrente";
+  const pending = isPending(draft.status) || parcelado || recorrente;
   const totals = useMemo(
     () =>
       calcEntryTotal({
@@ -93,14 +103,26 @@ export function EntryForm({
   );
   const entrada = Math.max(0, draft.valorEntrada || 0);
   const numParcelas = Math.max(1, Math.floor(draft.numParcelas || 1));
+  const diaRecorrencia = Math.max(1, Math.min(31, Math.floor(draft.diaRecorrencia || 10)));
   const saldoParcelas = Math.round((totals.liquido - entrada) * 100) / 100;
   const parcelaValor = parcelado && numParcelas > 0 && saldoParcelas > 0 ? saldoParcelas / numParcelas : 0;
+  const recorrenteDates =
+    recorrente && draft.vencimento && draft.dataFimRecorrencia
+      ? recurringDueDates(draft.vencimento, draft.dataFimRecorrencia, diaRecorrencia)
+      : [];
   const parceladoOk =
     !parcelado ||
     (numParcelas >= 1 &&
       entrada < totals.liquido &&
       saldoParcelas > 0 &&
       Boolean(draft.vencimento || draft.data));
+  const recorrenteOk =
+    !recorrente ||
+    (Boolean(draft.vencimento) &&
+      Boolean(draft.dataFimRecorrencia) &&
+      draft.dataFimRecorrencia! >= (draft.vencimento || "") &&
+      diaRecorrencia >= 1 &&
+      recorrenteDates.length > 0);
   const suggestions = useMemo(() => {
     const prefer = draft.kind === "venda" ? "cliente" : "fornecedor";
     return [...contacts].sort((a, b) => {
@@ -120,7 +142,8 @@ export function EntryForm({
     totals.liquido > 0 &&
     draft.contraparte.trim().length > 1 &&
     (!pending || Boolean(draft.vencimento)) &&
-    parceladoOk;
+    parceladoOk &&
+    recorrenteOk;
 
   function setContraparte(nome: string) {
     const hit = matchContact(nome, contacts);
@@ -128,7 +151,7 @@ export function EntryForm({
   }
 
   function setStatus(status: PaymentStatus) {
-    if (parcelado && status === "liquidado") return;
+    if ((parcelado || recorrente) && status === "liquidado") return;
     setDraft({
       ...draft,
       status,
@@ -136,7 +159,7 @@ export function EntryForm({
     });
   }
 
-  function setPagamentoModo(modo: "avista" | "parcelado") {
+  function setPagamentoModo(modo: PagamentoModo) {
     if (modo === "parcelado") {
       const status = pendingStatusFor(draft.kind);
       setDraft({
@@ -146,6 +169,23 @@ export function EntryForm({
         vencimento: draft.vencimento || draft.data,
         numParcelas: draft.numParcelas && draft.numParcelas > 0 ? draft.numParcelas : 2,
         valorEntrada: draft.valorEntrada ?? 0,
+      });
+      return;
+    }
+    if (modo === "recorrente") {
+      const status = pendingStatusFor(draft.kind);
+      const day =
+        draft.diaRecorrencia && draft.diaRecorrencia >= 1 && draft.diaRecorrencia <= 31
+          ? draft.diaRecorrencia
+          : Number((draft.vencimento || draft.data).slice(8, 10)) || 10;
+      const vencimento = dueOnDayFrom(draft.data, day);
+      setDraft({
+        ...draft,
+        pagamentoModo: "recorrente",
+        status,
+        diaRecorrencia: day,
+        vencimento,
+        dataFimRecorrencia: draft.dataFimRecorrencia || addMonthsOnDay(vencimento, 11, day),
       });
       return;
     }
@@ -208,7 +248,9 @@ export function EntryForm({
       onSubmit={(e) => {
         e.preventDefault();
         if (!valid) return;
-        const status = parcelado ? pendingStatusFor(draft.kind) : draft.status;
+        const status =
+          parcelado || recorrente ? pendingStatusFor(draft.kind) : draft.status;
+        const modo: PagamentoModo = parcelado ? "parcelado" : recorrente ? "recorrente" : "avista";
         onSave({
           ...draft,
           status,
@@ -216,26 +258,28 @@ export function EntryForm({
           precoUnitario: draft.precoUnitario ?? totals.bruto,
           quantidade: draft.quantidade && draft.quantidade > 0 ? draft.quantidade : 1,
           contactId: linked?.id,
-          pagamentoModo: parcelado ? "parcelado" : "avista",
+          pagamentoModo: modo,
           numParcelas: parcelado ? numParcelas : undefined,
           valorEntrada: parcelado ? entrada : undefined,
-          vencimento: parcelado || isPending(status) ? draft.vencimento || draft.data : undefined,
+          diaRecorrencia: recorrente ? diaRecorrencia : undefined,
+          dataFimRecorrencia: recorrente ? draft.dataFimRecorrencia : undefined,
+          vencimento:
+            parcelado || recorrente || isPending(status) ? draft.vencimento || draft.data : undefined,
         });
         resetForm();
       }}
     >
       <Field label="Data da operação">
-        <input
-          type="date"
+        <DateBrInput
           value={draft.data}
-          onChange={(e) =>
+          onChange={(iso) =>
             setDraft({
               ...draft,
-              data: e.target.value,
-              vencimento: pending && !draft.vencimento ? e.target.value : draft.vencimento,
+              data: iso || draft.data,
+              vencimento: pending && !draft.vencimento ? iso || draft.data : draft.vencimento,
             })
           }
-          className="input"
+          required
         />
       </Field>
       <Field label="Tipo">
@@ -246,7 +290,7 @@ export function EntryForm({
             setDraft({
               ...draft,
               kind,
-              status: parcelado ? pendingStatusFor(kind) : draft.status,
+              status: parcelado || recorrente ? pendingStatusFor(kind) : draft.status,
             });
           }}
           className="input"
@@ -355,18 +399,10 @@ export function EntryForm({
         />
       </Field>
       <Field label="Valor unitário">
-        <input
-          type="number"
-          inputMode="decimal"
-          step="0.01"
-          min="0"
+        <MoneyBrInput
           autoFocus={autoFocusValor && !(draft.precoUnitario || draft.valor)}
-          value={draft.precoUnitario || ""}
-          onChange={(e) => {
-            const precoUnitario = Number(e.target.value);
-            setDraft({ ...draft, precoUnitario, valor: precoUnitario });
-          }}
-          className="input"
+          value={draft.precoUnitario || 0}
+          onChange={(precoUnitario) => setDraft({ ...draft, precoUnitario, valor: precoUnitario })}
         />
       </Field>
       <Field label="Desconto" className="sm:col-span-2 md:col-span-1">
@@ -389,17 +425,26 @@ export function EntryForm({
               %
             </button>
           </div>
-          <input
-            type="number"
-            inputMode="decimal"
-            min="0"
-            step="0.01"
-            className="input min-w-0 flex-1"
-            value={draft.descontoValor || ""}
-            onChange={(e) => setDraft({ ...draft, descontoValor: Number(e.target.value) })}
-            placeholder={descontoTipo === "percent" ? "0 %" : "0,00"}
-            aria-label={descontoTipo === "percent" ? "Desconto em percentual" : "Desconto em reais"}
-          />
+          {descontoTipo === "reais" ? (
+            <MoneyBrInput
+              className="input min-w-0 flex-1"
+              value={draft.descontoValor || 0}
+              onChange={(descontoValor) => setDraft({ ...draft, descontoValor })}
+              aria-label="Desconto em reais"
+            />
+          ) : (
+            <input
+              type="number"
+              inputMode="decimal"
+              min="0"
+              step="0.01"
+              className="input min-w-0 flex-1"
+              value={draft.descontoValor || ""}
+              onChange={(e) => setDraft({ ...draft, descontoValor: Number(e.target.value) })}
+              placeholder="0 %"
+              aria-label="Desconto em percentual"
+            />
+          )}
         </div>
       </Field>
       <Field label="Documento">
@@ -415,19 +460,39 @@ export function EntryForm({
           <div className="flex rounded-full border border-line bg-bg p-0.5" role="group" aria-label="Condição de pagamento">
             <button
               type="button"
-              className={!parcelado ? "btn-primary flex-1 !px-3 !py-2 text-xs" : "btn-ghost flex-1 !px-3 !py-2 text-xs border-0"}
-              aria-pressed={!parcelado}
+              className={
+                !parcelado && !recorrente
+                  ? "btn-primary flex-1 !px-2 !py-2 text-[11px] sm:text-xs"
+                  : "btn-ghost flex-1 !px-2 !py-2 text-[11px] sm:text-xs border-0"
+              }
+              aria-pressed={!parcelado && !recorrente}
               onClick={() => setPagamentoModo("avista")}
             >
               À vista
             </button>
             <button
               type="button"
-              className={parcelado ? "btn-primary flex-1 !px-3 !py-2 text-xs" : "btn-ghost flex-1 !px-3 !py-2 text-xs border-0"}
+              className={
+                parcelado
+                  ? "btn-primary flex-1 !px-2 !py-2 text-[11px] sm:text-xs"
+                  : "btn-ghost flex-1 !px-2 !py-2 text-[11px] sm:text-xs border-0"
+              }
               aria-pressed={parcelado}
               onClick={() => setPagamentoModo("parcelado")}
             >
               Parcelado
+            </button>
+            <button
+              type="button"
+              className={
+                recorrente
+                  ? "btn-primary flex-1 !px-2 !py-2 text-[11px] sm:text-xs"
+                  : "btn-ghost flex-1 !px-2 !py-2 text-[11px] sm:text-xs border-0"
+              }
+              aria-pressed={recorrente}
+              onClick={() => setPagamentoModo("recorrente")}
+            >
+              Recorrente
             </button>
           </div>
         </Field>
@@ -438,7 +503,7 @@ export function EntryForm({
           value={draft.status}
           onChange={(e) => setStatus(e.target.value as PaymentStatus)}
           className="input"
-          disabled={parcelado}
+          disabled={parcelado || recorrente}
         >
           <option value="liquidado">Liquidado</option>
           <option value="a_receber">A receber</option>
@@ -447,11 +512,9 @@ export function EntryForm({
       </Field>
       {pending ? (
         <Field label={draft.status === "a_receber" ? "Data a receber" : "Data a pagar"}>
-          <input
-            type="date"
+          <DateBrInput
             value={draft.vencimento || ""}
-            onChange={(e) => setDraft({ ...draft, vencimento: e.target.value })}
-            className="input"
+            onChange={(iso) => setDraft({ ...draft, vencimento: iso })}
             required
           />
         </Field>
@@ -503,15 +566,9 @@ export function EntryForm({
             />
           </Field>
           <Field label="Valor de entrada">
-            <input
-              type="number"
-              inputMode="decimal"
-              min="0"
-              step="0.01"
-              className="input"
-              value={draft.valorEntrada || ""}
-              onChange={(e) => setDraft({ ...draft, valorEntrada: Number(e.target.value) })}
-              placeholder="0,00"
+            <MoneyBrInput
+              value={draft.valorEntrada || 0}
+              onChange={(valorEntrada) => setDraft({ ...draft, valorEntrada })}
             />
           </Field>
           <div className="rounded-2xl border border-line bg-bg px-3 py-3 text-sm sm:col-span-2 md:col-span-1">
@@ -524,6 +581,57 @@ export function EntryForm({
             <p className="mt-1 text-[11px] text-mute">
               1ª parcela na data a {draft.status === "a_pagar" ? "pagar" : "receber"}; demais a cada 30 dias.
               {entrada > 0 ? ` Entrada ${formatMoney(entrada)} liquidada na data da operação.` : ""}
+            </p>
+          </div>
+        </>
+      ) : null}
+
+      {recorrente ? (
+        <>
+          <Field label="Dia do vencimento">
+            <input
+              type="number"
+              inputMode="numeric"
+              min="1"
+              max="31"
+              step="1"
+              className="input"
+              value={draft.diaRecorrencia || ""}
+              onChange={(e) => {
+                const day = Math.max(1, Math.min(31, Math.floor(Number(e.target.value) || 0)));
+                const primeiro = dueOnDayFrom(draft.data, day);
+                const fim =
+                  draft.dataFimRecorrencia && draft.dataFimRecorrencia >= primeiro
+                    ? draft.dataFimRecorrencia
+                    : addMonthsOnDay(primeiro, 11, day);
+                setDraft({
+                  ...draft,
+                  diaRecorrencia: day,
+                  vencimento: primeiro,
+                  dataFimRecorrencia: fim,
+                });
+              }}
+              required
+            />
+          </Field>
+          <Field label="Data de fim">
+            <DateBrInput
+              value={draft.dataFimRecorrencia || ""}
+              onChange={(iso) => setDraft({ ...draft, dataFimRecorrencia: iso })}
+              required
+            />
+          </Field>
+          <div className="rounded-2xl border border-line bg-bg px-3 py-3 text-sm sm:col-span-2 md:col-span-1">
+            <p className="text-mute">
+              {draft.kind === "venda" ? "A receber" : "A pagar"} · dia {diaRecorrencia} ·{" "}
+              {formatMoney(totals.liquido)} × {recorrenteDates.length || "—"}
+            </p>
+            <p className="mt-1 text-[11px] text-mute">
+              Gera lançamentos mensais até a data de fim
+              {draft.vencimento && draft.dataFimRecorrencia && recorrenteDates.length
+                ? ` (${formatDate(draft.vencimento)} → ${formatDate(recorrenteDates[recorrenteDates.length - 1])})`
+                : ""}
+              . Em Contas você pode parar a recorrência sem alterar o que já foi recebido/pago.
             </p>
           </div>
         </>
@@ -549,11 +657,13 @@ export function EntryForm({
       </label>
       {!valid ? (
         <p className="text-xs text-orange sm:col-span-2 md:col-span-3">
-          {parcelado
-            ? "Informe valor, cliente, data a receber/pagar, parcelas e entrada menor que o líquido."
-            : pending
-              ? "Informe valor, cliente/fornecedor e a data a receber ou a pagar."
-              : "Informe o valor e o cliente/fornecedor para salvar."}
+          {recorrente
+            ? "Informe valor, cliente/fornecedor, dia do vencimento e a data de fim."
+            : parcelado
+              ? "Informe valor, cliente, data a receber/pagar, parcelas e entrada menor que o líquido."
+              : pending
+                ? "Informe valor, cliente/fornecedor e a data a receber ou a pagar."
+                : "Informe o valor e o cliente/fornecedor para salvar."}
         </p>
       ) : null}
       <div className="sticky bottom-20 z-[5] -mx-1 flex gap-2 bg-paper/95 p-1 backdrop-blur sm:static sm:bottom-auto sm:mx-0 sm:bg-transparent sm:p-0 sm:backdrop-blur-none sm:col-span-2 md:col-span-3 md:bottom-auto">
@@ -674,7 +784,7 @@ export function SmartCapture({
         <p className="mt-2 text-xs text-green">
           Detectado: {hint.kind} de {hint.valor.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })} ·{" "}
           {hint.contraparte}
-          {hint.status !== "liquidado" && hint.vencimento ? ` · vence ${hint.vencimento}` : ""}
+          {hint.status !== "liquidado" && hint.vencimento ? ` · vence ${formatDate(hint.vencimento)}` : ""}
         </p>
       ) : null}
       {notice ? <p className="mt-2 text-xs text-orange">{notice}</p> : null}

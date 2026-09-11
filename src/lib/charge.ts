@@ -82,6 +82,14 @@ export function chargeMessage(company: Company, entry: Entry) {
   const due = entry.vencimento || entry.data;
   const tipo = resolvePixTipo(company);
   const key = pixKeyForCompany(company);
+  const formaLabel: Record<string, string> = {
+    pix: "PIX",
+    boleto: "boleto",
+    transferencia: "transferência",
+    credito: "cartão",
+    debito: "débito",
+    dinheiro: "dinheiro",
+  };
   const lines = [
     `Olá${entry.contraparte ? `, ${entry.contraparte}` : ""}!`,
     "",
@@ -89,8 +97,9 @@ export function chargeMessage(company: Company, entry: Entry) {
     entry.descricao ? entry.descricao : "Serviço / venda",
     `Valor: ${formatMoney(entry.valor)}`,
     `Vencimento: ${formatDate(due)}`,
+    `Forma preferida: ${formaLabel[entry.formaPagamento] || entry.formaPagamento}`,
   ];
-  if (key) {
+  if (key && entry.formaPagamento === "pix") {
     lines.push("", tipo === "copia_e_cola" ? "Pix copia e cola:" : "Chave Pix:", key);
   }
   return lines.join("\n");

@@ -305,7 +305,7 @@ export const localPlatform = {
       const user = store.users.find((u) => u.id === sub.userId);
       if (user && user.role !== "master") {
         user.plan = patch.plan;
-        user.role = patch.plan;
+        user.role = patch.plan === "contador" ? "contador" : "pro";
       }
     }
     if (patch.cycle) sub.cycle = patch.cycle;

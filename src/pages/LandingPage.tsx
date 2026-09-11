@@ -223,11 +223,11 @@ export function LandingPage() {
           <h2 className="font-display text-4xl text-ink">Pacotes de acesso</h2>
           <p className="mt-2 text-mute">
             {canPurchase
-              ? "PODMEI Pro para o MEI. PODMEI Contador para o escritório."
-              : "PODMEI Pro para o MEI. PODMEI Contador para o escritório. Assinatura apenas em podmei.com."}
+              ? "Pro para o essencial. Premium para caixa e visão completa. Contador para o escritório."
+              : "Pro, Premium e Contador. Assinatura apenas em podmei.com."}
           </p>
         </div>
-        <div className="mt-8 grid gap-4 lg:grid-cols-2">
+        <div className="mt-8 grid gap-4 lg:grid-cols-3">
           {PLAN_KEYS.map((key) => {
             const p = plans[key];
             return (

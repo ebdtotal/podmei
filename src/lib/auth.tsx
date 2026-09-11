@@ -17,7 +17,7 @@ const AuthContext = createContext<AuthValue | null>(null);
 export function emptyWorkspaceFromUser(user: SessionUser): Workspace {
   const isContador = user.plan === "contador" || user.role === "master";
   const client = createMeiClient({
-    plan: isContador ? "contador" : "pro",
+    plan: isContador ? "contador" : user.plan === "premium" ? "premium" : "pro",
     company: {
       nome: user.empresa || "Novo MEI",
       email: user.email,
