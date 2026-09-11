@@ -1,6 +1,8 @@
 import { FileSpreadsheet, Landmark, Receipt, Stamp, Users } from "lucide-react";
 import { Link } from "react-router-dom";
+import { AlertBanners } from "@/components/alerts/AlertBanners";
 import { TrendChart } from "@/components/charts/TrendChart";
+import { buildAlerts } from "@/lib/alerts";
 import { hasActiveEmployee } from "@/lib/folha";
 import {
   dasnSummary,
@@ -19,7 +21,8 @@ import { MONTHS, MONTHS_SHORT } from "@/lib/types";
 import { cn, currentYear, formatMoney, formatPercent } from "@/lib/utils";
 
 export function DashboardPage() {
-  const { company, entries, employee, payrolls } = useStore();
+  const { company, entries, employee, payrolls, clients, activeClientId } = useStore();
+  const shared = clients.find((c) => c.id === activeClientId)?.sharedInviteId;
   const carteiraTo = "/contador";
   const carteiraLabel = "Carteira do contador";
   const year = currentYear();
@@ -65,6 +68,14 @@ export function DashboardPage() {
           </Link>
         </div>
       </div>
+
+      {shared ? (
+        <p className="rounded-2xl border border-line bg-paper px-4 py-3 text-sm text-mute">
+          Cópia compartilhada pelo MEI. Os lançamentos novos aparecem quando o escritório atualiza este CNPJ na carteira.
+        </p>
+      ) : null}
+
+      <AlertBanners alerts={buildAlerts(company, entries)} />
 
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
         <Shortcut to="/app/das" color="bg-orange" icon={Stamp} label="Emitir DAS mensal" />

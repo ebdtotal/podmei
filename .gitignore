@@ -33,3 +33,9 @@ new-assets.zip
 
 ios_distribution_private_key
 ios_distribution_private_key.pub
+android/local.properties
+android/keystore.properties
+android/*.jks
+android/*.keystore
+*.jks
+*.keystore

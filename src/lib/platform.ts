@@ -1,5 +1,5 @@
 import { Capacitor } from "@capacitor/core";
-import type { Workspace } from "./types";
+import type { MeiClient, Workspace } from "./types";
 import type {
   AccountRecord,
   CheckoutInput,
@@ -17,6 +17,19 @@ import { clearLocalSession, localPlatform, readLocalSession, SESSION_KEY } from 
 const API = "/api/index.php";
 const CHECKOUT_API = "/api/checkout.php";
 const PROD_ORIGIN = "https://podmei.com";
+
+export type AccountantInvite = {
+  id: string;
+  token: string;
+  ownerEmail: string;
+  ownerNome: string;
+  companyNome: string;
+  cnpj: string;
+  accountantEmail: string;
+  status: string;
+  createdAt: string;
+  acceptedAt: string;
+};
 
 function timeoutSignal(ms: number) {
   const controller = new AbortController();
@@ -505,6 +518,124 @@ export const platform = {
       return;
     }
     return localPlatform.deleteMyAccount();
+  },
+
+  async checkAlertEmails() {
+    const session = readLocalSession();
+    if (!session?.token) return { sent: [] as string[] };
+    const res = await fetch(apiBase("/api/alertas.php"), {
+      method: "POST",
+      cache: "no-store",
+      signal: timeoutSignal(25_000),
+      headers: {
+        "Content-Type": "application/json",
+        Accept: "application/json",
+        Authorization: `Bearer ${session.token}`,
+      },
+      body: "{}",
+    });
+    const data = parseJsonPayload<{ sent?: string[]; error?: string }>(await res.text(), res.status);
+    if (!res.ok) throw new Error(data.error || "Não foi possível enviar os lembretes.");
+    return { sent: data.sent ?? [] };
+  },
+
+  async inviteAccountant(email: string) {
+    const session = readLocalSession();
+    if (!session?.token) throw new Error("Sessão inválida.");
+    const res = await fetch(apiBase("/api/convite.php"), {
+      method: "POST",
+      cache: "no-store",
+      signal: timeoutSignal(25_000),
+      headers: {
+        "Content-Type": "application/json",
+        Accept: "application/json",
+        Authorization: `Bearer ${session.token}`,
+      },
+      body: JSON.stringify({ action: "invite", email }),
+    });
+    const data = parseJsonPayload<{
+      invite?: AccountantInvite;
+      emailSent?: boolean;
+      link?: string;
+      error?: string;
+    }>(await res.text(), res.status);
+    if (!res.ok) throw new Error(data.error || "Não foi possível enviar o convite.");
+    return data;
+  },
+
+  async accountantInvites() {
+    const session = readLocalSession();
+    if (!session?.token) return { sent: [] as AccountantInvite[], incoming: [] as AccountantInvite[] };
+    const res = await fetch(apiBase("/api/convite.php"), {
+      method: "POST",
+      cache: "no-store",
+      signal: timeoutSignal(20_000),
+      headers: {
+        "Content-Type": "application/json",
+        Accept: "application/json",
+        Authorization: `Bearer ${session.token}`,
+      },
+      body: JSON.stringify({ action: "list" }),
+    });
+    const data = parseJsonPayload<{ sent?: AccountantInvite[]; incoming?: AccountantInvite[]; error?: string }>(
+      await res.text(),
+      res.status,
+    );
+    if (!res.ok) throw new Error(data.error || "Não foi possível carregar os convites.");
+    return { sent: data.sent ?? [], incoming: data.incoming ?? [] };
+  },
+
+  async previewInvite(token: string) {
+    const res = await fetch(apiBase(`/api/convite.php?token=${encodeURIComponent(token)}`), {
+      cache: "no-store",
+      signal: timeoutSignal(20_000),
+      headers: { Accept: "application/json" },
+    });
+    const data = parseJsonPayload<{ invite?: AccountantInvite; error?: string }>(await res.text(), res.status);
+    if (!res.ok) throw new Error(data.error || "Convite não encontrado.");
+    return data.invite!;
+  },
+
+  async acceptInvite(token: string) {
+    const session = readLocalSession();
+    if (!session?.token) throw new Error("Entre com a conta do escritório para aceitar.");
+    const res = await fetch(apiBase("/api/convite.php"), {
+      method: "POST",
+      cache: "no-store",
+      signal: timeoutSignal(25_000),
+      headers: {
+        "Content-Type": "application/json",
+        Accept: "application/json",
+        Authorization: `Bearer ${session.token}`,
+      },
+      body: JSON.stringify({ action: "accept", token }),
+    });
+    const data = parseJsonPayload<{ invite?: AccountantInvite; client?: MeiClient; error?: string }>(
+      await res.text(),
+      res.status,
+    );
+    if (!res.ok) throw new Error(data.error || "Não foi possível aceitar o convite.");
+    return data;
+  },
+
+  async sharedClient(inviteId: string) {
+    const session = readLocalSession();
+    if (!session?.token) throw new Error("Sessão inválida.");
+    const res = await fetch(apiBase("/api/convite.php"), {
+      method: "POST",
+      cache: "no-store",
+      signal: timeoutSignal(25_000),
+      headers: {
+        "Content-Type": "application/json",
+        Accept: "application/json",
+        Authorization: `Bearer ${session.token}`,
+      },
+      body: JSON.stringify({ action: "snapshot", id: inviteId }),
+    });
+    const data = parseJsonPayload<{ client?: MeiClient; error?: string }>(await res.text(), res.status);
+    if (!res.ok) throw new Error(data.error || "Não foi possível atualizar o MEI.");
+    if (!data.client) throw new Error("O MEI ainda não tem dados na nuvem.");
+    return data.client;
   },
 
   async deletePayment(id: string) {

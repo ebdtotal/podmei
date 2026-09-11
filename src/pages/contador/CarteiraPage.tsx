@@ -1,21 +1,47 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { AlertTriangle, Plus, Search } from "lucide-react";
+import { AlertTriangle, Plus, RefreshCw, Search } from "lucide-react";
 import { clientSnapshot } from "@/lib/portfolio";
 import { dasPerfilFromTipo } from "@/lib/das";
 import { companyTypeLabel } from "@/lib/mei";
+import { platform, type AccountantInvite } from "@/lib/platform";
 import { useStore } from "@/lib/store";
 import type { CompanyType, MeiClient, MeiStatus } from "@/lib/types";
 import { cn, currentYear, formatMoney, formatPercent } from "@/lib/utils";
 
 export function CarteiraPage() {
-  const { accountant, clients, activeClientId, updateClient, removeClient, selectClient } =
+  const { accountant, clients, activeClientId, updateClient, removeClient, selectClient, openSharedClient } =
     useStore();
   const navigate = useNavigate();
   const [q, setQ] = useState("");
   const [status, setStatus] = useState<"todos" | MeiStatus>("ativo");
   const [creating, setCreating] = useState(false);
+  const [incoming, setInvites] = useState<AccountantInvite[]>([]);
+  const [inviteMsg, setInviteMsg] = useState("");
   const year = currentYear();
+
+  useEffect(() => {
+    void platform
+      .accountantInvites()
+      .then((data) => setInvites(data.incoming))
+      .catch(() => setInvites([]));
+  }, []);
+
+  async function acceptShared(invite: AccountantInvite) {
+    setInviteMsg("");
+    const result = await platform.acceptInvite(invite.token);
+    if (result.client) openSharedClient(result.client);
+    const data = await platform.accountantInvites();
+    setInvites(data.incoming);
+    navigate("/app");
+  }
+
+  async function openShared(invite: AccountantInvite) {
+    setInviteMsg("");
+    const client = await platform.sharedClient(invite.id);
+    openSharedClient(client);
+    navigate("/app");
+  }
 
   const rows = useMemo(() => {
     const t = q.toLowerCase();
@@ -73,6 +99,33 @@ export function CarteiraPage() {
           warn={dasLate + near > 0}
         />
       </div>
+
+      {incoming.length ? (
+        <section className="rounded-2xl border border-line bg-paper p-4">
+          <h2 className="text-sm font-semibold">Convites dos MEIs</h2>
+          <ul className="mt-3 space-y-2">
+            {incoming.map((invite) => (
+              <li key={invite.id} className="flex flex-wrap items-center justify-between gap-2 text-sm">
+                <span>
+                  <strong>{invite.companyNome || "MEI"}</strong>
+                  {invite.cnpj ? ` · ${invite.cnpj}` : ""} · {invite.status === "aceito" ? "na carteira" : "aguardando aceite"}
+                </span>
+                {invite.status === "aceito" ? (
+                  <button type="button" className="btn-ghost gap-2" onClick={() => void openShared(invite).catch((err) => setInviteMsg(err instanceof Error ? err.message : "Falha ao abrir."))}>
+                    <RefreshCw className="size-4" />
+                    Atualizar e abrir
+                  </button>
+                ) : (
+                  <button type="button" className="btn-primary" onClick={() => void acceptShared(invite).catch((err) => setInviteMsg(err instanceof Error ? err.message : "Não foi possível aceitar."))}>
+                    Aceitar
+                  </button>
+                )}
+              </li>
+            ))}
+          </ul>
+          {inviteMsg ? <p className="mt-2 text-sm text-red">{inviteMsg}</p> : null}
+        </section>
+      ) : null}
 
       {creating ? (
         <NovoMeiForm

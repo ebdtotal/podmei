@@ -5,7 +5,7 @@ import { dasPerfilFromTipo, dasPerfilLabel } from "@/lib/das";
 import { useAuth } from "@/lib/auth";
 import { allowsExternalPurchaseUi } from "@/lib/native";
 import { plans } from "@/lib/plans";
-import { platform } from "@/lib/platform";
+import { platform, type AccountantInvite } from "@/lib/platform";
 import type { Subscription } from "@/lib/platform-types";
 import { useStore } from "@/lib/store";
 import type { Company, CompanyType, DasPerfil } from "@/lib/types";
@@ -38,6 +38,11 @@ export function EmpresaPage() {
   const [subBusy, setSubBusy] = useState(false);
   const [subMsg, setSubMsg] = useState("");
   const [subErr, setSubErr] = useState("");
+  const [inviteEmail, setInviteEmail] = useState("");
+  const [inviteBusy, setInviteBusy] = useState(false);
+  const [inviteMsg, setInviteMsg] = useState("");
+  const [inviteErr, setInviteErr] = useState("");
+  const [invites, setInvites] = useState<AccountantInvite[]>([]);
 
   useEffect(() => {
     setForm(company);
@@ -46,6 +51,14 @@ export function EmpresaPage() {
   useEffect(() => {
     if (!user || user.role === "master") return;
     void platform.mySubscription().then(setSub).catch(() => setSub(null));
+  }, [user]);
+
+  useEffect(() => {
+    if (!user || user.role === "master" || user.plan === "contador") return;
+    void platform
+      .accountantInvites()
+      .then((data) => setInvites(data.sent))
+      .catch(() => setInvites([]));
   }, [user]);
 
   useEffect(() => {
@@ -206,6 +219,14 @@ export function EmpresaPage() {
           <Field label="E-mail">
             <input className="input" value={form.email} onChange={(e) => patch("email", e.target.value)} />
           </Field>
+          <Field label="Chave Pix (cobrança)">
+            <input
+              className="input"
+              placeholder="CPF, CNPJ, e-mail, telefone ou aleatória"
+              value={form.pixChave ?? ""}
+              onChange={(e) => patch("pixChave", e.target.value)}
+            />
+          </Field>
           <Field label="Endereço">
             <input className="input" value={form.endereco} onChange={(e) => patch("endereco", e.target.value)} />
           </Field>
@@ -342,6 +363,66 @@ export function EmpresaPage() {
         Salvar cadastro
       </button>
       {saved ? <p className="text-sm text-green">Cadastro atualizado.</p> : null}
+
+      {user && user.role !== "master" && user.plan !== "contador" ? (
+        <section className="rounded-2xl border border-line bg-paper p-5">
+          <h2 className="text-sm font-semibold">Convidar o contador</h2>
+          <p className="mt-1 text-sm text-mute">
+            O escritório entra com o plano PODMEI Contador e passa a ver este CNPJ na carteira. O convite vai para o
+            e-mail cadastrado na conta dele.
+          </p>
+          <form
+            className="mt-4 flex flex-wrap items-end gap-2"
+            onSubmit={(e) => {
+              e.preventDefault();
+              setInviteBusy(true);
+              setInviteMsg("");
+              setInviteErr("");
+              void platform
+                .inviteAccountant(inviteEmail.trim())
+                .then(async (result) => {
+                  setInviteMsg(
+                    result.emailSent
+                      ? `Convite enviado para ${inviteEmail.trim()}.`
+                      : result.link
+                        ? `O e-mail não saiu. Envie este link: ${result.link}`
+                        : "Convite criado, mas o e-mail não saiu.",
+                  );
+                  setInviteEmail("");
+                  const next = await platform.accountantInvites();
+                  setInvites(next.sent);
+                })
+                .catch((err) => setInviteErr(err instanceof Error ? err.message : "Não foi possível enviar."))
+                .finally(() => setInviteBusy(false));
+            }}
+          >
+            <label className="min-w-[240px] flex-1 text-sm">
+              E-mail do escritório
+              <input
+                className="input mt-1"
+                type="email"
+                required
+                value={inviteEmail}
+                onChange={(e) => setInviteEmail(e.target.value)}
+              />
+            </label>
+            <button className="btn-primary" disabled={inviteBusy}>
+              {inviteBusy ? "Enviando…" : "Enviar convite"}
+            </button>
+          </form>
+          {inviteMsg ? <p className="mt-2 text-sm text-green-700">{inviteMsg}</p> : null}
+          {inviteErr ? <p className="mt-2 text-sm text-red">{inviteErr}</p> : null}
+          {invites.length ? (
+            <ul className="mt-3 space-y-1 text-sm text-mute">
+              {invites.map((item) => (
+                <li key={item.id}>
+                  {item.accountantEmail} — {item.status === "aceito" ? "aceito" : item.status === "pendente" ? "aguardando" : item.status}
+                </li>
+              ))}
+            </ul>
+          ) : null}
+        </section>
+      ) : null}
 
       {user && user.role !== "master" ? (
         <section className="rounded-2xl border border-line bg-paper p-5">

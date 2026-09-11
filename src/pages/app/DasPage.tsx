@@ -1,6 +1,8 @@
 import { ExternalLink, Printer } from "lucide-react";
 import { useMemo, useState } from "react";
 import { BackToReports } from "@/components/layout/BackToReports";
+import { AlertBanners } from "@/components/alerts/AlertBanners";
+import { buildAlerts } from "@/lib/alerts";
 import {
   dasBreakdown,
   dasCompetenceKey,
@@ -108,6 +110,7 @@ export function DasPage() {
   return (
     <div className="space-y-6">
       <BackToReports />
+      <AlertBanners alerts={buildAlerts(company, entries).filter((a) => a.kind === "das")} />
       <div className="no-print flex flex-wrap items-end justify-between gap-3">
         <div>
           <h1 className="font-display text-3xl text-ink">Emissão do DAS</h1>

@@ -14,6 +14,8 @@ import {
   totalRevenue,
   yearEntries,
 } from "@/lib/mei";
+import { AlertBanners } from "@/components/alerts/AlertBanners";
+import { buildAlerts } from "@/lib/alerts";
 import { useStore } from "@/lib/store";
 import { MONTHS_SHORT } from "@/lib/types";
 import { cn, currentYear, formatMoney, formatPercent } from "@/lib/utils";
@@ -40,6 +42,7 @@ export function LimitesPage() {
 
   return (
     <div className="space-y-6">
+      <AlertBanners alerts={buildAlerts(company, entries).filter((a) => a.kind === "limite")} />
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
           <h1 className="font-display text-3xl text-ink">Limites de faturamento</h1>

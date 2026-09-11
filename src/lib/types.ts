@@ -43,6 +43,8 @@ export interface Company {
   limiteFaturamento: number;
   dasPerfil?: DasPerfil;
   logoDataUrl?: string;
+  /** Chave Pix do MEI — usada na cobrança de contas a receber. */
+  pixChave?: string;
 }
 
 export interface Contact {
@@ -170,6 +172,8 @@ export interface MeiClient {
   payrolls?: PayrollRun[];
   contacts?: Contact[];
   products?: Product[];
+  /** Convite aceito: cópia do MEI na carteira do contador. */
+  sharedInviteId?: string;
 }
 
 export interface Workspace {

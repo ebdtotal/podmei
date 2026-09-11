@@ -24,6 +24,7 @@ import { RelatoriosPage } from "./pages/app/RelatoriosPage";
 import { AssinarRetornoPage } from "./pages/AssinarRetornoPage";
 import { CheckoutPage } from "./pages/CheckoutPage";
 import { CarteiraPage } from "./pages/contador/CarteiraPage";
+import { ConvitePage } from "./pages/ConvitePage";
 import { EscritorioPage } from "./pages/contador/EscritorioPage";
 import { LandingPage } from "./pages/LandingPage";
 import { PrivacidadePage, TermosPage } from "./pages/LegalPage";
@@ -43,6 +44,7 @@ export default function App() {
       <Route path="/privacidade" element={<PrivacidadePage />} />
       <Route path="/termos" element={<TermosPage />} />
       <Route path="/entrar" element={<LoginPage />} />
+      <Route path="/convite/:token" element={<ConvitePage />} />
       <Route path="/login" element={<Navigate to="/entrar" replace />} />
       <Route path="/assinar/sucesso" element={<AssinarRetornoPage tipo="sucesso" />} />
       <Route path="/assinar/falha" element={<AssinarRetornoPage tipo="falha" />} />

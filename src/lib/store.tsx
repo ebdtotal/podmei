@@ -275,6 +275,7 @@ interface StoreValue {
   updateClient: (id: string, patch: Partial<MeiClient>) => void;
   removeClient: (id: string) => void;
   selectClient: (id: string) => void;
+  openSharedClient: (client: MeiClient) => void;
   importClient: (data: AppState) => MeiClient;
   resetDemo: () => void;
   exportBackup: () => void;
@@ -431,6 +432,32 @@ export function StoreProvider({ children }: { children: ReactNode }) {
           };
         }),
       selectClient: (id) => commit((prev) => ({ ...prev, activeClientId: id })),
+      openSharedClient: (client) => {
+        if (!client?.company) return;
+        const ready: MeiClient = {
+          ...client,
+          id: client.sharedInviteId ? `share_${client.sharedInviteId}` : client.id,
+          sharedInviteId: client.sharedInviteId,
+          status: client.status || "ativo",
+          entries: client.entries ?? [],
+          contacts: client.contacts ?? [],
+          products: client.products ?? [],
+          whatsapp: client.whatsapp ?? [],
+          whatsappPhone: client.whatsappPhone ?? "",
+          honorario: client.honorario ?? 0,
+          notes: client.notes ?? "",
+          createdAt: client.createdAt || new Date().toISOString().slice(0, 10),
+          plan: client.plan || "pro",
+        };
+        commit((prev) => {
+          const exists = prev.clients.some((c) => c.id === ready.id);
+          return {
+            ...prev,
+            clients: exists ? prev.clients.map((c) => (c.id === ready.id ? { ...c, ...ready } : c)) : [...prev.clients, ready],
+            activeClientId: ready.id,
+          };
+        });
+      },
       importClient: (data) => {
         const client = createMeiClient({
           company: data.company,
@@ -523,6 +550,7 @@ export function useStore() {
     },
     activeClientId: ctx.activeClientId ?? "",
     selectClient: ctx.selectClient ?? (() => undefined),
+    openSharedClient: ctx.openSharedClient ?? (() => undefined),
   };
 }
 

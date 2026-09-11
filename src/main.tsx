@@ -6,6 +6,7 @@ import { ErrorBoundary } from "./components/ErrorBoundary";
 import { AuthProvider } from "./lib/auth";
 import { StoreProvider } from "./lib/store";
 import { ThemeProvider } from "./lib/theme";
+import { AlertBridge } from "./lib/AlertBridge";
 import { WorkspaceCloudBridge } from "./lib/WorkspaceCloudBridge";
 import { iniciarAppNativo } from "./lib/native";
 import "./index.css";
@@ -20,6 +21,7 @@ createRoot(document.getElementById("root")!).render(
           <AuthProvider>
             <StoreProvider>
               <WorkspaceCloudBridge />
+              <AlertBridge />
               <App />
             </StoreProvider>
           </AuthProvider>

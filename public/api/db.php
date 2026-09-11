@@ -141,6 +141,27 @@ function podmei_migrate(PDO $pdo): void {
     k TEXT PRIMARY KEY,
     v TEXT NOT NULL
   )");
+  $pdo->exec("CREATE TABLE IF NOT EXISTS alert_mails (
+    id TEXT PRIMARY KEY,
+    user_id TEXT NOT NULL,
+    alert_key TEXT NOT NULL,
+    sent_at TEXT NOT NULL,
+    UNIQUE(user_id, alert_key)
+  )");
+  $pdo->exec("CREATE TABLE IF NOT EXISTS accountant_invites (
+    id TEXT PRIMARY KEY,
+    token TEXT NOT NULL UNIQUE,
+    owner_user_id TEXT NOT NULL,
+    owner_email TEXT DEFAULT '',
+    owner_nome TEXT DEFAULT '',
+    company_nome TEXT DEFAULT '',
+    cnpj TEXT DEFAULT '',
+    accountant_email TEXT NOT NULL,
+    status TEXT DEFAULT 'pendente',
+    accountant_user_id TEXT DEFAULT '',
+    created_at TEXT NOT NULL,
+    accepted_at TEXT DEFAULT ''
+  )");
 
   podmei_ensure_column($pdo, "signups", "mp_preapproval_id", "TEXT DEFAULT ''");
   podmei_ensure_column($pdo, "subscriptions", "mp_preapproval_id", "TEXT DEFAULT ''");
