@@ -4,7 +4,7 @@ import { entryDiscountAmount, entryGross } from "@/lib/entryPricing";
 import { draftToEntry, entryToDraft, type ParsedDraft } from "@/lib/parser";
 import { useStore } from "@/lib/store";
 import type { Entry } from "@/lib/types";
-import { cn, formatDate, formatMoney } from "@/lib/utils";
+import { cn, formatDate, formatMoney, parseMoney } from "@/lib/utils";
 
 const statusClass: Record<Entry["status"], string> = {
   liquidado: "bg-green/15 text-green",
@@ -34,13 +34,36 @@ export function LancamentosPage() {
   }, [draft, draftStamp, editing]);
 
   const filtered = useMemo(() => {
-    const t = q.toLowerCase();
-    return entries.filter(
-      (e) =>
-        e.contraparte.toLowerCase().includes(t) ||
-        e.descricao.toLowerCase().includes(t) ||
-        e.documento.toLowerCase().includes(t),
-    );
+    const t = q.trim().toLowerCase();
+    const qDigits = t.replace(/\D/g, "");
+    const qMoney = t ? parseMoney(t) : NaN;
+    const hasMoneyHint = /\d/.test(t) && /[\d,.]/.test(t);
+
+    return entries
+      .map((entry, index) => ({ entry, index }))
+      .filter(({ entry: e }) => {
+        if (!t) return true;
+        if (e.contraparte.toLowerCase().includes(t)) return true;
+        if (e.descricao.toLowerCase().includes(t)) return true;
+        if (e.documento.toLowerCase().includes(t)) return true;
+
+        const dateBr = formatDate(e.data).toLowerCase();
+        if (dateBr.includes(t) || e.data.toLowerCase().includes(t)) return true;
+        if (qDigits.length >= 4 && e.data.replace(/\D/g, "").includes(qDigits)) return true;
+
+        const money = formatMoney(e.valor).toLowerCase();
+        if (money.includes(t)) return true;
+        const valorBr = e.valor.toFixed(2).replace(".", ",");
+        if (valorBr.includes(t.replace(/\s/g, ""))) return true;
+        if (hasMoneyHint && Number.isFinite(qMoney) && Math.abs(e.valor - qMoney) < 0.005) return true;
+        return false;
+      })
+      .sort((a, b) => {
+        const byDate = b.entry.data.localeCompare(a.entry.data);
+        if (byDate !== 0) return byDate;
+        return b.index - a.index;
+      })
+      .map(({ entry }) => entry);
   }, [entries, q]);
 
   function startEdit(entry: Entry) {
@@ -122,7 +145,7 @@ export function LancamentosPage() {
         <h2 className="text-sm font-semibold">Movimentações ({filtered.length})</h2>
         <input
           className="input w-full sm:max-w-xs"
-          placeholder="Filtrar cliente, documento…"
+          placeholder="Buscar cliente, data, valor…"
           value={q}
           onChange={(e) => setQ(e.target.value)}
         />
