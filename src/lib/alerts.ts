@@ -8,7 +8,7 @@ import {
   payrollMap,
 } from "./folha";
 import { proportionalLimit, purchaseLimit, totalPurchases, totalRevenue, yearEntries } from "./mei";
-import type { Company, Employee, Entry, PayrollRun } from "./types";
+import type { Company, Employee, Entry, MeiClient, PayrollRun } from "./types";
 import { MONTHS } from "./types";
 import { formatDate, formatMoney, todayIso } from "./utils";
 
@@ -113,6 +113,31 @@ export function buildAlerts(
   }
 
   return alerts;
+}
+
+/** Avisos de um ou mais MEIs. Com vários CNPJs, o id e o título identificam a empresa. */
+export function buildPortfolioAlerts(
+  clients: Pick<MeiClient, "id" | "status" | "company" | "entries" | "employee" | "payrolls">[],
+  today = todayIso(),
+): AppAlert[] {
+  const active = clients.filter((client) => client.status !== "arquivado");
+  const multi = active.length > 1;
+  const out: AppAlert[] = [];
+  for (const client of active) {
+    const nome = client.company?.nome?.trim() || "MEI";
+    const alerts = buildAlerts(client.company, client.entries ?? [], today, {
+      employee: client.employee ?? null,
+      payrolls: client.payrolls,
+    });
+    for (const alert of alerts) {
+      out.push({
+        ...alert,
+        id: multi ? `${client.id}:${alert.id}` : alert.id,
+        title: multi ? `${nome} · ${alert.title}` : alert.title,
+      });
+    }
+  }
+  return out;
 }
 
 function limitAlert(input: {

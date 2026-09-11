@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { AlertTriangle, Plus, RefreshCw, Search } from "lucide-react";
+import { AlertBanners } from "@/components/alerts/AlertBanners";
+import { buildPortfolioAlerts, dismissAlert, dismissedAlertIds } from "@/lib/alerts";
 import { clientSnapshot } from "@/lib/portfolio";
 import { dasPerfilFromTipo } from "@/lib/das";
 import { companyTypeLabel } from "@/lib/mei";
@@ -18,7 +20,12 @@ export function CarteiraPage() {
   const [creating, setCreating] = useState(false);
   const [incoming, setInvites] = useState<AccountantInvite[]>([]);
   const [inviteMsg, setInviteMsg] = useState("");
+  const [dismissed, setDismissed] = useState(() => dismissedAlertIds());
   const year = currentYear();
+  const portfolioAlerts = useMemo(
+    () => buildPortfolioAlerts(clients).filter((alert) => !dismissed.has(alert.id)),
+    [clients, dismissed],
+  );
 
   useEffect(() => {
     void platform
@@ -88,6 +95,14 @@ export function CarteiraPage() {
           </button>
         </div>
       </div>
+
+      <AlertBanners
+        alerts={portfolioAlerts}
+        onDismiss={(id) => {
+          dismissAlert(id);
+          setDismissed(dismissedAlertIds());
+        }}
+      />
 
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
         <Kpi label="MEIs ativos" value={String(ativos.length)} />

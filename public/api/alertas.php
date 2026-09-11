@@ -1,6 +1,6 @@
 <?php
 /**
- * Lembretes: DAS (5 dias antes / em atraso) e limites de faturamento e compras (70% / 90% / teto).
+ * Lembretes: DAS, limites e folha. Contador recebe avisos de todos os MEIs da carteira.
  * POST autenticado: envia o que ainda não foi enviado para a conta.
  * GET ?cron=1&key=... : varre as áreas na nuvem (cron HostGator).
  */
@@ -156,7 +156,7 @@ function alert_labor(array $employee, array $payrolls, string $today, int $year,
         $comp = sprintf("%04d-%02d", $y, $month + 1);
         $out[] = [
           "key" => ($late ? "folha-{$dutyId}-late:" : "folha-{$dutyId}:") . $comp,
-          "subject" => ($late ? "Pagar {$dutyTitle} de {$ref} em atraso" : "Pagar {$dutyTitle} de {$ref} {$quando}") . " — PODMEI",
+          "subject" => ($late ? "Pagar {$dutyTitle} de {$ref} em atraso" : "Pagar {$dutyTitle} de {$ref} {$quando}") . " — {$empresa} — PODMEI",
           "body" => "Olá,\n\n{$empresa} tem colaborador cadastrado ({$nome}). A {$dutyTitle} de {$ref} " . ($late ? "venceu em " : "vence em ") . alert_date($due) . ".\n\nQuite a guia no eSocial e lance o pagamento na folha:\nhttps://podmei.com/app/folha\n\nPODMEI",
         ];
       }
@@ -185,15 +185,25 @@ function alert_limit_mail(
   $shown = number_format($pct, 1, ",", ".");
   return [[
     "key" => "{$prefix}:{$year}:{$band}",
-    "subject" => "{$titulo} — PODMEI",
+    "subject" => "{$titulo} — {$empresa} — PODMEI",
     "body" => "Olá,\n\n{$empresa} {$verb} " . alert_money($used) . " de " . alert_money($limit) . " neste ano ({$shown}% {$ceiling}).\n\nAcompanhe em:\nhttps://podmei.com/app/limites\n\nPODMEI",
   ]];
 }
 
+function alert_workspace_clients(array $ws): array {
+  $clients = $ws["clients"] ?? [];
+  if (!is_array($clients) || !$clients) return [];
+  $out = [];
+  foreach ($clients as $c) {
+    if (!is_array($c)) continue;
+    if ((string) ($c["status"] ?? "ativo") === "arquivado") continue;
+    $out[] = $c;
+  }
+  return $out;
+}
+
 /** @return list<array{key:string,subject:string,body:string}> */
-function alert_compute(array $ws, string $today): array {
-  $client = alert_active_client($ws);
-  if (!$client) return [];
+function alert_compute_for_client(array $client, string $today): array {
   $company = is_array($client["company"] ?? null) ? $client["company"] : [];
   $entries = is_array($client["entries"] ?? null) ? $client["entries"] : [];
   $nome = trim((string) ($company["nome"] ?? "sua empresa"));
@@ -215,11 +225,10 @@ function alert_compute(array $ws, string $today): array {
       if (!empty($paid[$key])) continue;
       $ref = $months[$month] . "/" . $y;
       if ($diff < 0) {
-        // Exercício anterior não gera e-mail de atraso (lançamento retroativo continua permitido).
         if ($y < $year) continue;
         $late = [
           "key" => "das-late:" . $key,
-          "subject" => "DAS de {$ref} em atraso — PODMEI",
+          "subject" => "DAS de {$ref} em atraso — {$nome} — PODMEI",
           "body" => "Olá,\n\nO DAS de {$ref} de {$nome} venceu em " . alert_date($due) . " e ainda não está lançado como pago no PODMEI.\n\nEmita a guia e registre o pagamento:\nhttps://podmei.com/app/das\n\nPODMEI",
         ];
         continue;
@@ -227,7 +236,7 @@ function alert_compute(array $ws, string $today): array {
       $quando = $diff === 0 ? "hoje" : "em {$diff} dia" . ($diff === 1 ? "" : "s");
       $out[] = [
         "key" => "das:" . $key,
-        "subject" => "DAS de {$ref} vence {$quando} — PODMEI",
+        "subject" => "DAS de {$ref} vence {$quando} — {$nome} — PODMEI",
         "body" => "Olá,\n\nO DAS de {$ref} de {$nome} vence {$quando} (" . alert_date($due) . ") e a competência ainda está em aberto.\n\nEmita a guia e, depois de pagar, lance o pagamento no app:\nhttps://podmei.com/app/das\n\nPODMEI",
       ];
     }
@@ -284,6 +293,24 @@ function alert_compute(array $ws, string $today): array {
     "comprou",
     "do teto de compras (80% do limite proporcional)"
   ));
+  return $out;
+}
+
+/** @return list<array{key:string,subject:string,body:string}> */
+function alert_compute(array $ws, string $today): array {
+  $clients = alert_workspace_clients($ws);
+  if (!$clients) return [];
+  $multi = count($clients) > 1;
+  $out = [];
+  foreach ($clients as $client) {
+    $cid = (string) ($client["id"] ?? "");
+    foreach (alert_compute_for_client($client, $today) as $item) {
+      if ($multi && $cid !== "") {
+        $item["key"] = $cid . ":" . $item["key"];
+      }
+      $out[] = $item;
+    }
+  }
   return $out;
 }
 
