@@ -1,6 +1,6 @@
 <?php
 /**
- * Lembretes: DAS (5 dias antes / em atraso) e limite 70% / 90% / teto.
+ * Lembretes: DAS (5 dias antes / em atraso) e limites de faturamento e compras (70% / 90% / teto).
  * POST autenticado: envia o que ainda não foi enviado para a conta.
  * GET ?cron=1&key=... : varre as áreas na nuvem (cron HostGator).
  */
@@ -166,6 +166,31 @@ function alert_labor(array $employee, array $payrolls, string $today, int $year,
 }
 
 /** @return list<array{key:string,subject:string,body:string}> */
+function alert_limit_mail(
+  float $used,
+  float $limit,
+  int $year,
+  string $empresa,
+  string $prefix,
+  string $titleAt,
+  string $titleNear,
+  string $verb,
+  string $ceiling
+): array {
+  if ($limit <= 0 || $used <= 0) return [];
+  $pct = ($used / $limit) * 100;
+  $band = $pct >= 100 ? 100 : ($pct >= 90 ? 90 : ($pct >= 70 ? 70 : 0));
+  if (!$band) return [];
+  $titulo = $band >= 100 ? $titleAt : sprintf($titleNear, $band);
+  $shown = number_format($pct, 1, ",", ".");
+  return [[
+    "key" => "{$prefix}:{$year}:{$band}",
+    "subject" => "{$titulo} — PODMEI",
+    "body" => "Olá,\n\n{$empresa} {$verb} " . alert_money($used) . " de " . alert_money($limit) . " neste ano ({$shown}% {$ceiling}).\n\nAcompanhe em:\nhttps://podmei.com/app/limites\n\nPODMEI",
+  ]];
+}
+
+/** @return list<array{key:string,subject:string,body:string}> */
 function alert_compute(array $ws, string $today): array {
   $client = alert_active_client($ws);
   if (!$client) return [];
@@ -210,12 +235,15 @@ function alert_compute(array $ws, string $today): array {
   if ($late) $out[] = $late;
 
   $billed = 0.0;
+  $bought = 0.0;
   foreach ($entries as $entry) {
     if (!is_array($entry)) continue;
-    if (($entry["kind"] ?? "") !== "venda") continue;
     $data = (string) ($entry["data"] ?? "");
     if (strpos($data, (string) $year) !== 0) continue;
-    $billed += (float) ($entry["valor"] ?? 0);
+    $kind = (string) ($entry["kind"] ?? "");
+    $valor = (float) ($entry["valor"] ?? 0);
+    if ($kind === "venda") $billed += $valor;
+    if ($kind === "compra") $bought += $valor;
   }
   $annual = (float) ($company["limiteFaturamento"] ?? 81000);
   if ($annual <= 0) $annual = 81000;
@@ -234,18 +262,28 @@ function alert_compute(array $ws, string $today): array {
     $out = array_merge($out, alert_labor($employee, $payrolls, $today, $year, $months, $nome));
   }
 
-  if ($limit > 0 && $billed > 0) {
-    $pct = ($billed / $limit) * 100;
-    $band = $pct >= 100 ? 100 : ($pct >= 90 ? 90 : ($pct >= 70 ? 70 : 0));
-    if ($band) {
-      $titulo = $band >= 100 ? "Limite de faturamento do MEI estourou" : "Faturamento em {$band}% do limite";
-      $out[] = [
-        "key" => "limite:{$year}:{$band}",
-        "subject" => "{$titulo} — PODMEI",
-        "body" => "Olá,\n\n{$nome} faturou " . alert_money($billed) . " de " . alert_money($limit) . " neste ano (" . number_format($pct, 1, ",", ".") . "% do teto proporcional).\n\nAcompanhe em:\nhttps://podmei.com/app/limites\n\nPODMEI",
-      ];
-    }
-  }
+  $out = array_merge($out, alert_limit_mail(
+    $billed,
+    $limit,
+    $year,
+    $nome,
+    "limite",
+    "Limite de faturamento do MEI estourou",
+    "Faturamento em %d%% do limite",
+    "faturou",
+    "do teto proporcional"
+  ));
+  $out = array_merge($out, alert_limit_mail(
+    $bought,
+    $limit * 0.8,
+    $year,
+    $nome,
+    "limite-compras",
+    "Limite de compras do MEI estourou",
+    "Compras em %d%% do limite",
+    "comprou",
+    "do teto de compras (80% do limite proporcional)"
+  ));
   return $out;
 }
 

@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
 import { ExternalLink, Printer, UserRound } from "lucide-react";
+import { FolhaPrintSheet } from "@/components/folha/FolhaPrintSheet";
 import { HoleriteSheet } from "@/components/folha/HoleriteSheet";
 import { SALARIO_MINIMO } from "@/lib/das";
 import { printOrSharePdf } from "@/lib/print";
@@ -257,7 +258,7 @@ export function FolhaPage() {
             </section>
 
             {display ? (
-              <section className="print-sheet rounded-2xl border border-gold bg-paper p-5">
+              <section className="rounded-2xl border border-gold bg-paper p-5">
                 <div className="flex flex-wrap items-start justify-between gap-2">
                   <div>
                     <p className="text-xs font-semibold uppercase tracking-wide text-mute">
@@ -343,6 +344,16 @@ export function FolhaPage() {
       )}
       {display && employee ? (
         <div className="pointer-events-none fixed top-0 -left-[14000px] w-[718px]" aria-hidden>
+          <FolhaPrintSheet
+            company={company}
+            employee={employee}
+            year={year}
+            month={month}
+            kind={kind}
+            pay={display}
+            salaryDue={salaryDue}
+            daeDue={daeDue}
+          />
           <HoleriteSheet company={company} employee={employee} year={year} month={month} pay={display} />
         </div>
       ) : null}

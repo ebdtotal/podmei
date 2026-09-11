@@ -196,7 +196,7 @@ async function captureLightSheet(sheet: HTMLElement): Promise<HTMLCanvasElement>
   const iframe = document.createElement("iframe");
   iframe.setAttribute("aria-hidden", "true");
   iframe.style.cssText =
-    "position:fixed;left:-12000px;top:0;width:900px;height:1600px;border:0;background:#ffffff;";
+    "position:fixed;left:-12000px;top:0;width:900px;height:2200px;border:0;background:#ffffff;";
   document.body.appendChild(iframe);
   const doc = iframe.contentDocument;
   if (!doc) {
@@ -247,12 +247,10 @@ async function captureLightSheet(sheet: HTMLElement): Promise<HTMLCanvasElement>
     try {
       return await html2canvas(clone, options);
     } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err);
-      if (!/oklab|oklch|color function/i.test(msg)) throw err;
       doc.querySelectorAll("style, link[rel='stylesheet']").forEach((node) => node.remove());
       const plain = doc.createElement("style");
       plain.textContent =
-        "html,body{margin:0;background:#fff} .print-sheet,.print-sheet *,.print-holerite,.print-holerite *{color:#111 !important;background:#fff !important;border-color:#111 !important;box-shadow:none !important}";
+        "html,body{margin:0;background:#fff;color:#111} .print-sheet,.print-holerite{color:#111;background:#fff}";
       doc.head.appendChild(plain);
       return await html2canvas(clone, { ...options, onclone: undefined });
     }

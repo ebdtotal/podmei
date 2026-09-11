@@ -80,68 +80,55 @@ export function IrpfPage() {
         </div>
       </div>
 
-      <article className="print-sheet mx-auto max-w-3xl space-y-5 rounded-2xl border border-line bg-paper p-6 text-sm text-ink">
+      <article className="print-sheet mx-auto max-w-[190mm] space-y-2 bg-white p-4 text-[11px] leading-snug text-[#111]">
         <header>
-          <p className="text-xs font-semibold uppercase tracking-wide text-mute">Ano de competência {year}</p>
-          <h2 className="mt-1 font-display text-2xl">Declaração de IRPF — renda do MEI</h2>
-          <p className="mt-2 text-mute">
+          <p className="text-[10px] font-semibold uppercase tracking-wide">Ano de competência {year}</p>
+          <h2 className="mt-0.5 font-display text-xl">Declaração de IRPF — renda do MEI</h2>
+          <p className="mt-1">
             {nome} · CNPJ {cnpj}
           </p>
         </header>
 
-        <section
-          className={
-            report.precisa
-              ? "rounded-2xl border border-red/40 bg-red/10 px-4 py-3"
-              : "rounded-2xl border border-green/40 bg-green/10 px-4 py-3"
-          }
-        >
+        <section style={{ background: "#fff", color: "#111", border: "1px solid #111", padding: "8px 10px" }}>
           <p className="font-semibold">{report.precisa ? "Precisa declarar" : "Não precisa declarar só pela renda do MEI"}</p>
-          <p className="mt-1 text-mute">{report.motivo}</p>
-          <p className="mt-2 text-xs text-mute">
+          <p className="mt-1">{report.motivo}</p>
+          <p className="mt-1 text-[10px]">
             Outras regras da Receita (outros rendimentos, bens acima do limite, dependentes) podem exigir a declaração
             mesmo assim. Este relatório usa só o movimento do MEI lançado no PODMEI.
           </p>
         </section>
 
-        <section className="space-y-2">
+        <section className="space-y-1">
           <h3 className="font-semibold">Rendimentos recebidos de Pessoa Jurídica</h3>
-          <p className="text-xs text-mute">Programa IRPF: ficha Rendimentos tributáveis recebidos de pessoa jurídica.</p>
+          <p className="text-[10px]">Programa IRPF: ficha Rendimentos tributáveis recebidos de pessoa jurídica.</p>
           <Field k="CNPJ" v={cnpj} />
           <Field k="Nome" v={nome} />
           <Field k="Valor" v={`${formatMoney(report.tributavel)} (rendimento tributável)`} />
-          <Field
-            k="INSS"
-            v={`${formatMoney(report.inss)} (soma do INSS dos DAS de ${year}, pelo salário mínimo daquele ano)`}
-          />
+          <Field k="INSS" v={`${formatMoney(report.inss)} (soma do INSS dos DAS de ${year})`} />
         </section>
 
-        <section className="space-y-2">
+        <section className="space-y-1">
           <h3 className="font-semibold">Rendimentos isentos e não tributáveis, código 09 — lucros e dividendos</h3>
-          <p className="text-xs text-mute">Programa IRPF: ficha Rendimentos isentos e não tributáveis, código 09.</p>
+          <p className="text-[10px]">Programa IRPF: ficha Rendimentos isentos e não tributáveis, código 09.</p>
           <Field k="CNPJ" v={cnpj} />
           <Field k="Nome" v={nome} />
           <Field k="Valor" v={`${formatMoney(report.isento)} (rendimento isento)`} />
         </section>
 
-        <section className="space-y-2">
+        <section className="space-y-1">
           <h3 className="font-semibold">Bens e direitos, Grupo 03, código 02 — Quotas ou quinhões de capital</h3>
-          <p className="text-xs text-mute">Programa IRPF: ficha Bens e direitos, grupo 03, código 02.</p>
+          <p className="text-[10px]">Programa IRPF: ficha Bens e direitos, grupo 03, código 02.</p>
           <Field k="CNPJ" v={cnpj} />
           <Field k="Discriminação" v={`100% do capital social da "${nome}" CNPJ "${cnpj}"`} />
           <Field k="Situação em 31/12" v={formatMoney(company.capitalSocial || 0)} />
-          {!company.capitalSocial ? (
-            <p className="text-xs text-mute">Informe o capital social no cadastro da empresa para preencher este valor.</p>
-          ) : null}
         </section>
 
-        <p className="text-xs text-mute">
-          Sem contabilidade formal, a parcela isenta de lucros do MEI fica limitada a 32% da receita de serviços, 16% de
-          transporte de passageiros e 8% de comércio, indústria e transporte de cargas (alíquota usada no app:{" "}
-          {Math.round(presumedProfitRate("servico") * 100)}% serviços). O rendimento isento é o menor valor entre o lucro
-          líquido ({formatMoney(report.lucro)}) e essa parcela da receita ({formatMoney(report.revenue)} de faturamento). O
-          restante do lucro é o rendimento tributável. O INSS é a parcela previdenciária de cada DAS mensal do ano-base, não
-          juros nem multa. Não substitui a orientação do contador nem a declaração transmitida à Receita.
+        <p className="text-[10px]">
+          Sem contabilidade formal, o isento fica limitado a {Math.round(presumedProfitRate("servico") * 100)}% da receita
+          de serviços, 16% de transporte de passageiros e 8% das demais. Isento: menor valor entre o lucro líquido (
+          {formatMoney(report.lucro)}) e a parcela da receita ({formatMoney(report.revenue)}). O restante do lucro é
+          tributável. O INSS é só a parcela previdenciária dos DAS de {year}, sem juros nem multa. Não substitui o contador
+          nem a declaração da Receita.
         </p>
       </article>
     </div>
@@ -150,9 +137,9 @@ export function IrpfPage() {
 
 function Field({ k, v }: { k: string; v: string }) {
   return (
-    <div className="grid grid-cols-[140px_1fr] border border-line text-[13px] sm:grid-cols-[180px_1fr]">
-      <div className="bg-bg px-3 py-2 font-semibold">{k}</div>
-      <div className="px-3 py-2">{v}</div>
+    <div className="grid grid-cols-[148px_1fr] border border-[#111] text-[11px]" style={{ background: "#fff", color: "#111" }}>
+      <div className="border-r border-[#111] px-2 py-1 font-semibold">{k}</div>
+      <div className="px-2 py-1">{v}</div>
     </div>
   );
 }

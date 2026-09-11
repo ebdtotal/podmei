@@ -7,7 +7,7 @@ import {
   inssColaboradorDueDate,
   payrollMap,
 } from "./folha";
-import { proportionalLimit, totalRevenue, yearEntries } from "./mei";
+import { proportionalLimit, purchaseLimit, totalPurchases, totalRevenue, yearEntries } from "./mei";
 import type { Company, Employee, Entry, PayrollRun } from "./types";
 import { MONTHS } from "./types";
 import { formatDate, formatMoney, todayIso } from "./utils";
@@ -77,37 +77,70 @@ export function buildAlerts(
     }
   }
 
-  const billed = totalRevenue(yearEntries(entries, year));
+  const yearList = yearEntries(entries, year);
+  const billed = totalRevenue(yearList);
   const limit = proportionalLimit(company, year);
-  if (limit > 0 && billed > 0) {
-    const pct = (billed / limit) * 100;
-    const band = pct >= 100 ? 100 : pct >= 90 ? 90 : pct >= 70 ? 70 : 0;
-    if (band) {
-      alerts.push({
-        id: `limite:${year}:${band}`,
-        kind: "limite",
-        level: band >= 100 ? "danger" : "warn",
-        title:
-          band >= 100
-            ? "Limite de faturamento do MEI estourou"
-            : `Faturamento em ${band}% do limite`,
-        body: `${nome}: ${formatMoney(billed)} de ${formatMoney(limit)} neste ano (${pct.toFixed(1).replace(".", ",")}%). ${
-          band >= 100
-            ? "Acima do teto proporcional. Revise antes do desenquadramento."
-            : band >= 90
-              ? "Muito perto do teto de R$ 81 mil (proporcional à abertura)."
-              : "Acompanhe para não cruzar o teto do MEI."
-        }`,
-        href: "/app/limites",
-      });
-    }
-  }
+  const billedAlert = limitAlert({
+    id: `limite:${year}`,
+    used: billed,
+    limit,
+    titleAt: "Limite de faturamento do MEI estourou",
+    titleNear: (band) => `Faturamento em ${band}% do limite`,
+    name: nome,
+    hint100: "Acima do teto proporcional. Revise antes do desenquadramento.",
+    hint90: "Muito perto do teto de R$ 81 mil (proporcional à abertura).",
+    hint70: "Acompanhe para não cruzar o teto do MEI.",
+  });
+  if (billedAlert) alerts.push(billedAlert);
+
+  const bought = totalPurchases(yearList);
+  const buyLimit = purchaseLimit(company, year);
+  const buyAlert = limitAlert({
+    id: `limite-compras:${year}`,
+    used: bought,
+    limit: buyLimit,
+    titleAt: "Limite de compras do MEI estourou",
+    titleNear: (band) => `Compras em ${band}% do limite`,
+    name: nome,
+    hint100: "Acima de 80% do teto proporcional de faturamento. Revise as compras de mercadoria.",
+    hint90: "Muito perto do teto de compras (80% do limite proporcional).",
+    hint70: "Acompanhe para não cruzar o teto de compras do MEI.",
+  });
+  if (buyAlert) alerts.push(buyAlert);
 
   if (labor && hasActiveEmployee(labor.employee)) {
     alerts.push(...laborAlerts(labor.employee, labor.payrolls, today));
   }
 
   return alerts;
+}
+
+function limitAlert(input: {
+  id: string;
+  used: number;
+  limit: number;
+  titleAt: string;
+  titleNear: (band: number) => string;
+  name: string;
+  hint100: string;
+  hint90: string;
+  hint70: string;
+}): AppAlert | null {
+  if (input.limit <= 0 || input.used <= 0) return null;
+  const pct = (input.used / input.limit) * 100;
+  const band = pct >= 100 ? 100 : pct >= 90 ? 90 : pct >= 70 ? 70 : 0;
+  if (!band) return null;
+  const shown = pct.toFixed(1).replace(".", ",");
+  return {
+    id: `${input.id}:${band}`,
+    kind: "limite",
+    level: band >= 100 ? "danger" : "warn",
+    title: band >= 100 ? input.titleAt : input.titleNear(band),
+    body: `${input.name}: ${formatMoney(input.used)} de ${formatMoney(input.limit)} neste ano (${shown}%). ${
+      band >= 100 ? input.hint100 : band >= 90 ? input.hint90 : input.hint70
+    }`,
+    href: "/app/limites",
+  };
 }
 
 function laborAlerts(employee: Employee, payrolls: PayrollRun[] | undefined, today: string): AppAlert[] {
