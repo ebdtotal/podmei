@@ -95,7 +95,7 @@ export async function downloadReciboPdf(company: Company, entry: Entry) {
 
   const paragrafos = [
     `Pelo presente, eu ${quem} inscrita no CNPJ ${cnpj} declaro que RECEBI no dia ${formatDate(entry.data)}, o valor de ${formatMoney(entry.valor)}, de ${cliente}.`,
-    `Declaro ainda que o valor recebido se refere-se a ${descricao} do lançamento.`,
+    `Declaro ainda que o valor recebido se refere-se a ${descricao}.`,
     "Sendo expressão de verdade e sem qualquer coação, firmo o presente.",
   ];
 
