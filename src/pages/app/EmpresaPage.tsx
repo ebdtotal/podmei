@@ -9,6 +9,7 @@ import { platform, type AccountantInvite } from "@/lib/platform";
 import type { Subscription } from "@/lib/platform-types";
 import { useStore } from "@/lib/store";
 import type { Company, CompanyType, DasPerfil } from "@/lib/types";
+import { stripLogoBackground } from "@/lib/logo";
 import { formatMoney } from "@/lib/utils";
 
 const statusLabel: Record<string, string> = {
@@ -43,10 +44,26 @@ export function EmpresaPage() {
   const [inviteMsg, setInviteMsg] = useState("");
   const [inviteErr, setInviteErr] = useState("");
   const [invites, setInvites] = useState<AccountantInvite[]>([]);
+  const [logoPreview, setLogoPreview] = useState(company.logoDataUrl ?? "");
 
   useEffect(() => {
     setForm(company);
   }, [company]);
+
+  useEffect(() => {
+    const src = form.logoDataUrl;
+    if (!src) {
+      setLogoPreview("");
+      return;
+    }
+    let cancelled = false;
+    void stripLogoBackground(src).then((next) => {
+      if (!cancelled) setLogoPreview(next);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [form.logoDataUrl]);
 
   useEffect(() => {
     if (!user || user.role === "master") return;
@@ -168,13 +185,13 @@ export function EmpresaPage() {
       <section className="rounded-2xl border border-line bg-paper p-5">
         <h2 className="text-sm font-semibold">Logo da empresa</h2>
         <p className="mt-1 text-xs text-mute">
-          PNG com fundo transparente, horizontal. Tamanho ideal: <strong className="text-ink">720 × 200 px</strong>{" "}
-          (proporção 3,6:1). A faixa do recibo usa até 78 mm de largura e 22 mm de altura, sem esticar a imagem.
+          PNG horizontal, <strong className="text-ink">720 × 200 px</strong>. Fundo branco ou de cor sólida é
+          removido para a marca ficar transparente na faixa do recibo.
         </p>
         <div className="mt-4 flex flex-wrap items-center gap-4">
           <div className="grid h-[72px] w-[260px] place-items-center overflow-hidden rounded-xl bg-[#070b14] px-3">
-            {form.logoDataUrl ? (
-              <img src={form.logoDataUrl} alt="Logo da empresa" className="max-h-[52px] max-w-[230px] object-contain" />
+            {logoPreview ? (
+              <img src={logoPreview} alt="Logo da empresa" className="max-h-[52px] max-w-[230px] object-contain" />
             ) : (
               <span className="px-2 text-center text-[11px] text-white/70">720 × 200 px</span>
             )}
@@ -190,7 +207,7 @@ export function EmpresaPage() {
                   const file = e.target.files?.[0];
                   if (!file) return;
                   setLogoError("");
-                  void fileToLogoDataUrl(file)
+                  void fileToLogoDataUrl(file).then(stripLogoBackground)
                     .then((logoDataUrl) => patch("logoDataUrl", logoDataUrl))
                     .catch(() => setLogoError("Não foi possível usar essa imagem. Tente PNG ou JPG."));
                   e.target.value = "";

@@ -1,5 +1,6 @@
 import { jsPDF } from "jspdf";
 import type { Company, Entry } from "./types";
+import { stripLogoBackground } from "./logo";
 import { formatDate, formatMoney } from "./utils";
 import { saveOrSharePdf } from "./print";
 
@@ -48,9 +49,10 @@ export async function downloadReciboPdf(company: Company, entry: Entry) {
   const right = pageW - 14;
 
   const lines = headerLines(company);
-  const logo = company.logoDataUrl
-    ? await loadLogo(company.logoDataUrl).catch(() => null)
-    : null;
+  const logoSrc = company.logoDataUrl
+    ? await stripLogoBackground(company.logoDataUrl).catch(() => company.logoDataUrl)
+    : "";
+  const logo = logoSrc ? await loadLogo(logoSrc).catch(() => null) : null;
   const textBlock = 6 + lines.length * 4.4;
   const bandH = Math.max(34, (logo?.h ?? 0) + 12, textBlock + 10);
 

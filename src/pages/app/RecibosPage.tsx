@@ -1,4 +1,6 @@
-﻿import { Link } from "react-router-dom";
+﻿import { useEffect, useState } from "react";
+import { Link } from "react-router-dom";
+import { stripLogoBackground } from "@/lib/logo";
 import { downloadReciboPdf } from "@/lib/pdf";
 import { isSale } from "@/lib/mei";
 import { useStore } from "@/lib/store";
@@ -7,6 +9,22 @@ import { formatDate, formatMoney } from "@/lib/utils";
 export function RecibosPage() {
   const { company, entries } = useStore();
   const sales = entries.filter(isSale);
+  const [logoPreview, setLogoPreview] = useState(company.logoDataUrl ?? "");
+
+  useEffect(() => {
+    const src = company.logoDataUrl;
+    if (!src) {
+      setLogoPreview("");
+      return;
+    }
+    let cancelled = false;
+    void stripLogoBackground(src).then((next) => {
+      if (!cancelled) setLogoPreview(next);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [company.logoDataUrl]);
 
   return (
     <div className="space-y-6">
@@ -17,9 +35,9 @@ export function RecibosPage() {
             Cada venda cadastrada vira um recibo com os dados da empresa. Use quando a operação não tiver NFS-e.
           </p>
         </div>
-        {company.logoDataUrl ? (
+        {logoPreview ? (
           <img
-            src={company.logoDataUrl}
+            src={logoPreview}
             alt="Logo no recibo"
             className="h-14 w-40 rounded-lg bg-[#070b14] object-contain px-2"
           />
