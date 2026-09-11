@@ -45,26 +45,17 @@ function linesOf(employee: Employee, pay: Slip): Line[] {
   return rows;
 }
 
+/** HTML (sem SVG) — html2canvas no WebView falha com texto SVG rotacionado. */
 function SignatureStrip() {
   return (
-    <svg width="36" height="430" viewBox="0 0 36 430" style={{ display: "block" }}>
-      <g transform="translate(20 168) rotate(-90)">
-        <text textAnchor="middle" fontSize="7" fontFamily="Arial, Helvetica, sans-serif" fill="#111">
-          DECLARO TER RECEBIDO A IMPORTÂNCIA LÍQUIDA DISCRIMINADA NESTE RECIBO.
-        </text>
-      </g>
-      <g transform="translate(18 355) rotate(-90)">
-        <text textAnchor="middle" fontSize="6.5" fontWeight="700" fontFamily="Arial, Helvetica, sans-serif" fill="#111">
-          ASSINATURA DO FUNCIONÁRIO
-        </text>
-        <text y="16" textAnchor="middle" fontSize="11" fontFamily="Arial, Helvetica, sans-serif" fill="#111">
-          /     /
-        </text>
-        <text y="28" textAnchor="middle" fontSize="6.5" fontWeight="700" fontFamily="Arial, Helvetica, sans-serif" fill="#111">
-          DATA
-        </text>
-      </g>
-    </svg>
+    <div style={signCol}>
+      <div style={declareRot}>DECLARO TER RECEBIDO A IMPORTÂNCIA LÍQUIDA DISCRIMINADA NESTE RECIBO.</div>
+      <div style={signBoxRot}>
+        <div style={{ fontWeight: 700, fontSize: "6.5px" }}>ASSINATURA DO FUNCIONÁRIO</div>
+        <div style={{ marginTop: "6px", fontSize: "11px" }}>/&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;/</div>
+        <div style={{ marginTop: "4px", fontWeight: 700, fontSize: "6.5px" }}>DATA</div>
+      </div>
+    </div>
   );
 }
 
@@ -232,6 +223,37 @@ const viaTable: CSSProperties = {
 const mainCell: CSSProperties = { verticalAlign: "top", padding: 0, borderRight: line };
 
 const signCell: CSSProperties = { width: "36px", verticalAlign: "top", padding: 0, background: "#fff" };
+
+const signCol: CSSProperties = {
+  position: "relative",
+  width: "36px",
+  height: "430px",
+  overflow: "hidden",
+  background: "#fff",
+};
+
+const declareRot: CSSProperties = {
+  position: "absolute",
+  left: "50%",
+  top: "168px",
+  width: "250px",
+  transform: "translate(-50%, -50%) rotate(-90deg)",
+  fontSize: "7px",
+  letterSpacing: "0.3px",
+  textAlign: "center",
+  whiteSpace: "nowrap",
+  color: ink,
+};
+
+const signBoxRot: CSSProperties = {
+  position: "absolute",
+  left: "50%",
+  bottom: "78px",
+  width: "92px",
+  transform: "translateX(-50%) rotate(-90deg)",
+  textAlign: "center",
+  color: ink,
+};
 
 const inner: CSSProperties = { width: "100%", borderCollapse: "collapse" };
 

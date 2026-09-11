@@ -195,8 +195,19 @@ function revealPrintOnly(root: HTMLElement) {
 async function captureLightSheet(sheet: HTMLElement): Promise<HTMLCanvasElement> {
   const iframe = document.createElement("iframe");
   iframe.setAttribute("aria-hidden", "true");
-  iframe.style.cssText =
-    "position:fixed;left:-12000px;top:0;width:900px;height:2200px;border:0;background:#ffffff;";
+  // Precisa ficar na área pintada do WebView (não em left:-Npx): senão o canvas sai em branco.
+  iframe.style.cssText = [
+    "position:fixed",
+    "left:0",
+    "top:0",
+    "width:900px",
+    "height:2400px",
+    "border:0",
+    "background:#ffffff",
+    "opacity:0.01",
+    "pointer-events:none",
+    "z-index:-1",
+  ].join(";");
   document.body.appendChild(iframe);
   const doc = iframe.contentDocument;
   if (!doc) {
@@ -208,7 +219,8 @@ async function captureLightSheet(sheet: HTMLElement): Promise<HTMLCanvasElement>
     doc.head.appendChild(node.cloneNode(true));
   });
   const extra = doc.createElement("style");
-  extra.textContent = "html,body{margin:0;background:#fff;color:#0f172a}";
+  extra.textContent =
+    "html,body{margin:0;background:#fff;color:#0f172a} table{border-collapse:collapse} svg{display:block}";
   doc.head.appendChild(extra);
 
   const clone = sheet.cloneNode(true) as HTMLElement;
@@ -221,11 +233,21 @@ async function captureLightSheet(sheet: HTMLElement): Promise<HTMLCanvasElement>
   clone.style.border = "none";
   clone.style.background = "#ffffff";
   clone.style.color = "#0f172a";
+  clone.style.display = "block";
+  clone.style.visibility = "visible";
+  clone.style.opacity = "1";
+  clone.style.position = "static";
+  clone.style.left = "auto";
+  clone.style.top = "auto";
   doc.body.appendChild(clone);
 
   await neutralizeUnsupportedColors(doc);
   if (iframe.contentWindow) patchComputedColors(iframe.contentWindow);
-  await new Promise((r) => setTimeout(r, 40));
+  await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
+  await new Promise((r) => setTimeout(r, 50));
+
+  const captureH = Math.max(clone.scrollHeight, clone.offsetHeight, 1);
+  iframe.style.height = `${Math.min(Math.max(captureH + 40, 400), 8000)}px`;
 
   const options = {
     scale: 2,
@@ -234,7 +256,10 @@ async function captureLightSheet(sheet: HTMLElement): Promise<HTMLCanvasElement>
     backgroundColor: "#ffffff",
     logging: false,
     width: CAPTURE_WIDTH_PX,
+    height: captureH,
     windowWidth: CAPTURE_WIDTH_PX,
+    windowHeight: captureH,
+    foreignObjectRendering: false,
     onclone: (clonedDoc: Document) => {
       clonedDoc.querySelectorAll("style").forEach((style) => {
         style.textContent = rewriteUnsupportedColors(style.textContent || "");
@@ -244,16 +269,21 @@ async function captureLightSheet(sheet: HTMLElement): Promise<HTMLCanvasElement>
   };
 
   try {
+    let canvas: HTMLCanvasElement;
     try {
-      return await html2canvas(clone, options);
-    } catch (err) {
+      canvas = await html2canvas(clone, options);
+    } catch {
       doc.querySelectorAll("style, link[rel='stylesheet']").forEach((node) => node.remove());
       const plain = doc.createElement("style");
       plain.textContent =
-        "html,body{margin:0;background:#fff;color:#111} .print-sheet,.print-holerite{color:#111;background:#fff}";
+        "html,body{margin:0;background:#fff;color:#111} .print-sheet,.print-holerite{color:#111;background:#fff} table{border-collapse:collapse}";
       doc.head.appendChild(plain);
-      return await html2canvas(clone, { ...options, onclone: undefined });
+      canvas = await html2canvas(clone, { ...options, onclone: undefined });
     }
+    if (!canvas.width || !canvas.height) {
+      throw new Error("A captura do PDF saiu vazia. Tente de novo.");
+    }
+    return canvas;
   } finally {
     iframe.remove();
   }

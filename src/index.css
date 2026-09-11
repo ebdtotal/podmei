@@ -118,6 +118,18 @@ body {
   }
 }
 
+/* Modelos de PDF fora da tela, mas ainda pintados (WebView/html2canvas). */
+.pdf-capture-host {
+  position: fixed;
+  left: 0;
+  top: 0;
+  width: 718px;
+  z-index: -1;
+  opacity: 0.01;
+  pointer-events: none;
+  overflow: hidden;
+}
+
 @media print {
   @page {
     size: A4 portrait;
@@ -141,7 +153,8 @@ body {
   header,
   footer,
   .no-print,
-  .fixed {
+  .fixed,
+  .pdf-capture-host {
     display: none !important;
   }
 

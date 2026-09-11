@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { EntryForm, SmartCapture } from "@/components/entries/EntryForm";
 import { entryDiscountAmount, entryGross } from "@/lib/entryPricing";
-import { draftToEntry, entryToDraft, type ParsedDraft } from "@/lib/parser";
+import { draftToEntries, draftToEntry, entryToDraft, type ParsedDraft } from "@/lib/parser";
 import { useStore } from "@/lib/store";
 import type { Entry } from "@/lib/types";
 import { cn, formatDate, formatMoney, parseMoney } from "@/lib/utils";
@@ -19,7 +19,7 @@ const statusLabel: Record<Entry["status"], string> = {
 };
 
 export function LancamentosPage() {
-  const { entries, addEntry, updateEntry, removeEntry } = useStore();
+  const { entries, addEntry, addEntries, updateEntry, removeEntry } = useStore();
   const [draft, setDraft] = useState<{ data: ParsedDraft; source: Entry["source"] } | null>(null);
   const [editing, setEditing] = useState<Entry | null>(null);
   const [draftStamp, setDraftStamp] = useState(0);
@@ -107,6 +107,7 @@ export function LancamentosPage() {
           <EntryForm
             key={`edit-${editing.id}-${draftStamp}`}
             initial={entryToDraft(editing)}
+            allowParcelado={false}
             onCancel={() => setEditing(null)}
             onSave={(next) => {
               const patched = draftToEntry(next, editing.source);
@@ -125,7 +126,9 @@ export function LancamentosPage() {
             initial={draft.data}
             onCancel={() => setDraft(null)}
             onSave={(next) => {
-              addEntry(draftToEntry(next, draft.source));
+              const list = draftToEntries(next, draft.source);
+              if (list.length === 1) addEntry(list[0]);
+              else addEntries(list);
               setDraft(null);
             }}
           />
@@ -135,7 +138,9 @@ export function LancamentosPage() {
           <p className="mb-3 text-sm font-semibold">Lançamento manual</p>
           <EntryForm
             onSave={(next) => {
-              addEntry(draftToEntry(next, "manual"));
+              const list = draftToEntries(next, "manual");
+              if (list.length === 1) addEntry(list[0]);
+              else addEntries(list);
             }}
           />
         </section>

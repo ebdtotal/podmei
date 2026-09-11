@@ -32,6 +32,9 @@ const emptyDraft = (): ParsedDraft => ({
   precoUnitario: 0,
   descontoTipo: "reais",
   descontoValor: 0,
+  pagamentoModo: "avista",
+  numParcelas: 2,
+  valorEntrada: 0,
   confidence: "",
 });
 
@@ -39,16 +42,23 @@ function isPending(status: PaymentStatus) {
   return status === "a_receber" || status === "a_pagar";
 }
 
+function pendingStatusFor(kind: EntryKind): PaymentStatus {
+  return kind === "venda" ? "a_receber" : "a_pagar";
+}
+
 export function EntryForm({
   initial,
   onSave,
   onCancel,
   autoFocusValor = false,
+  allowParcelado = true,
 }: {
   initial?: Partial<ParsedDraft>;
   onSave: (draft: ParsedDraft) => void;
   onCancel?: () => void;
   autoFocusValor?: boolean;
+  /** Em edição, parcelado não gera novos lançamentos. */
+  allowParcelado?: boolean;
 }) {
   const { contacts, products } = useStore();
   const [draft, setDraft] = useState<ParsedDraft>(() => {
@@ -61,11 +71,15 @@ export function EntryForm({
       precoUnitario: unit,
       descontoTipo: base.descontoTipo ?? "reais",
       descontoValor: base.descontoValor ?? 0,
+      pagamentoModo: allowParcelado ? base.pagamentoModo || "avista" : "avista",
+      numParcelas: base.numParcelas && base.numParcelas > 0 ? base.numParcelas : 2,
+      valorEntrada: base.valorEntrada ?? 0,
     };
   });
   const [contactModalOpen, setContactModalOpen] = useState(false);
   const [productModalOpen, setProductModalOpen] = useState(false);
-  const pending = isPending(draft.status);
+  const parcelado = allowParcelado && draft.pagamentoModo === "parcelado";
+  const pending = isPending(draft.status) || parcelado;
   const totals = useMemo(
     () =>
       calcEntryTotal({
@@ -77,6 +91,16 @@ export function EntryForm({
       }),
     [draft.quantidade, draft.precoUnitario, draft.descontoTipo, draft.descontoValor, draft.valor],
   );
+  const entrada = Math.max(0, draft.valorEntrada || 0);
+  const numParcelas = Math.max(1, Math.floor(draft.numParcelas || 1));
+  const saldoParcelas = Math.round((totals.liquido - entrada) * 100) / 100;
+  const parcelaValor = parcelado && numParcelas > 0 && saldoParcelas > 0 ? saldoParcelas / numParcelas : 0;
+  const parceladoOk =
+    !parcelado ||
+    (numParcelas >= 1 &&
+      entrada < totals.liquido &&
+      saldoParcelas > 0 &&
+      Boolean(draft.vencimento || draft.data));
   const suggestions = useMemo(() => {
     const prefer = draft.kind === "venda" ? "cliente" : "fornecedor";
     return [...contacts].sort((a, b) => {
@@ -93,7 +117,10 @@ export function EntryForm({
     ? contacts.find((c) => c.id === draft.contactId)
     : matchContact(draft.contraparte, contacts);
   const valid =
-    totals.liquido > 0 && draft.contraparte.trim().length > 1 && (!pending || Boolean(draft.vencimento));
+    totals.liquido > 0 &&
+    draft.contraparte.trim().length > 1 &&
+    (!pending || Boolean(draft.vencimento)) &&
+    parceladoOk;
 
   function setContraparte(nome: string) {
     const hit = matchContact(nome, contacts);
@@ -101,10 +128,30 @@ export function EntryForm({
   }
 
   function setStatus(status: PaymentStatus) {
+    if (parcelado && status === "liquidado") return;
     setDraft({
       ...draft,
       status,
       vencimento: isPending(status) ? draft.vencimento || draft.data : draft.vencimento,
+    });
+  }
+
+  function setPagamentoModo(modo: "avista" | "parcelado") {
+    if (modo === "parcelado") {
+      const status = pendingStatusFor(draft.kind);
+      setDraft({
+        ...draft,
+        pagamentoModo: "parcelado",
+        status,
+        vencimento: draft.vencimento || draft.data,
+        numParcelas: draft.numParcelas && draft.numParcelas > 0 ? draft.numParcelas : 2,
+        valorEntrada: draft.valorEntrada ?? 0,
+      });
+      return;
+    }
+    setDraft({
+      ...draft,
+      pagamentoModo: "avista",
     });
   }
 
@@ -161,13 +208,18 @@ export function EntryForm({
       onSubmit={(e) => {
         e.preventDefault();
         if (!valid) return;
+        const status = parcelado ? pendingStatusFor(draft.kind) : draft.status;
         onSave({
           ...draft,
+          status,
           valor: totals.liquido,
           precoUnitario: draft.precoUnitario ?? totals.bruto,
           quantidade: draft.quantidade && draft.quantidade > 0 ? draft.quantidade : 1,
           contactId: linked?.id,
-          vencimento: pending ? draft.vencimento || draft.data : undefined,
+          pagamentoModo: parcelado ? "parcelado" : "avista",
+          numParcelas: parcelado ? numParcelas : undefined,
+          valorEntrada: parcelado ? entrada : undefined,
+          vencimento: parcelado || isPending(status) ? draft.vencimento || draft.data : undefined,
         });
         resetForm();
       }}
@@ -189,7 +241,14 @@ export function EntryForm({
       <Field label="Tipo">
         <select
           value={draft.kind}
-          onChange={(e) => setDraft({ ...draft, kind: e.target.value as EntryKind })}
+          onChange={(e) => {
+            const kind = e.target.value as EntryKind;
+            setDraft({
+              ...draft,
+              kind,
+              status: parcelado ? pendingStatusFor(kind) : draft.status,
+            });
+          }}
           className="input"
         >
           <option value="venda">Venda / receita</option>
@@ -350,11 +409,36 @@ export function EntryForm({
           className="input"
         />
       </Field>
+
+      {allowParcelado ? (
+        <Field label="Condição" className="sm:col-span-2 md:col-span-1">
+          <div className="flex rounded-full border border-line bg-bg p-0.5" role="group" aria-label="Condição de pagamento">
+            <button
+              type="button"
+              className={!parcelado ? "btn-primary flex-1 !px-3 !py-2 text-xs" : "btn-ghost flex-1 !px-3 !py-2 text-xs border-0"}
+              aria-pressed={!parcelado}
+              onClick={() => setPagamentoModo("avista")}
+            >
+              À vista
+            </button>
+            <button
+              type="button"
+              className={parcelado ? "btn-primary flex-1 !px-3 !py-2 text-xs" : "btn-ghost flex-1 !px-3 !py-2 text-xs border-0"}
+              aria-pressed={parcelado}
+              onClick={() => setPagamentoModo("parcelado")}
+            >
+              Parcelado
+            </button>
+          </div>
+        </Field>
+      ) : null}
+
       <Field label="Status">
         <select
           value={draft.status}
           onChange={(e) => setStatus(e.target.value as PaymentStatus)}
           className="input"
+          disabled={parcelado}
         >
           <option value="liquidado">Liquidado</option>
           <option value="a_receber">A receber</option>
@@ -404,6 +488,47 @@ export function EntryForm({
         </Field>
       ) : null}
 
+      {parcelado ? (
+        <>
+          <Field label="Qtd. de parcelas">
+            <input
+              type="number"
+              inputMode="numeric"
+              min="1"
+              step="1"
+              className="input"
+              value={draft.numParcelas || ""}
+              onChange={(e) => setDraft({ ...draft, numParcelas: Math.max(1, Math.floor(Number(e.target.value) || 0)) })}
+              required
+            />
+          </Field>
+          <Field label="Valor de entrada">
+            <input
+              type="number"
+              inputMode="decimal"
+              min="0"
+              step="0.01"
+              className="input"
+              value={draft.valorEntrada || ""}
+              onChange={(e) => setDraft({ ...draft, valorEntrada: Number(e.target.value) })}
+              placeholder="0,00"
+            />
+          </Field>
+          <div className="rounded-2xl border border-line bg-bg px-3 py-3 text-sm sm:col-span-2 md:col-span-1">
+            <p className="text-mute">
+              Saldo {formatMoney(Math.max(0, saldoParcelas))}
+              {saldoParcelas > 0 && numParcelas > 0
+                ? ` · ${numParcelas}x de ~${formatMoney(parcelaValor)}`
+                : ""}
+            </p>
+            <p className="mt-1 text-[11px] text-mute">
+              1ª parcela na data a {draft.status === "a_pagar" ? "pagar" : "receber"}; demais a cada 30 dias.
+              {entrada > 0 ? ` Entrada ${formatMoney(entrada)} liquidada na data da operação.` : ""}
+            </p>
+          </div>
+        </>
+      ) : null}
+
       <div className="rounded-2xl border border-line bg-bg px-3 py-3 text-sm sm:col-span-2 md:col-span-3">
         <p className="text-mute">
           Bruto {formatMoney(totals.bruto)}
@@ -424,9 +549,11 @@ export function EntryForm({
       </label>
       {!valid ? (
         <p className="text-xs text-orange sm:col-span-2 md:col-span-3">
-          {pending
-            ? "Informe valor, cliente/fornecedor e a data a receber ou a pagar."
-            : "Informe o valor e o cliente/fornecedor para salvar."}
+          {parcelado
+            ? "Informe valor, cliente, data a receber/pagar, parcelas e entrada menor que o líquido."
+            : pending
+              ? "Informe valor, cliente/fornecedor e a data a receber ou a pagar."
+              : "Informe o valor e o cliente/fornecedor para salvar."}
         </p>
       ) : null}
       <div className="sticky bottom-20 z-[5] -mx-1 flex gap-2 bg-paper/95 p-1 backdrop-blur sm:static sm:bottom-auto sm:mx-0 sm:bg-transparent sm:p-0 sm:backdrop-blur-none sm:col-span-2 md:col-span-3 md:bottom-auto">

@@ -1,6 +1,8 @@
 import type { Contact, DiscountKind, Entry, EntryKind, PaymentMethod, PaymentStatus, RevenueKind } from "./types";
 import { calcEntryTotal } from "./entryPricing";
-import { parseMoney, todayIso, uid } from "./utils";
+import { addDaysIso, parseMoney, todayIso, uid } from "./utils";
+
+export type PagamentoModo = "avista" | "parcelado";
 
 export interface ParsedDraft {
   kind: EntryKind;
@@ -20,6 +22,12 @@ export interface ParsedDraft {
   precoUnitario?: number;
   descontoTipo?: DiscountKind;
   descontoValor?: number;
+  /** À vista (padrão) ou parcelado (gera vários lançamentos). */
+  pagamentoModo?: PagamentoModo;
+  /** Quantidade de parcelas do saldo (após a entrada). */
+  numParcelas?: number;
+  /** Valor pago na entrada (liquidado na data da operação). */
+  valorEntrada?: number;
   confidence: string;
 }
 
@@ -99,8 +107,7 @@ export function parseLancamento(raw: string): ParsedDraft | null {
   };
 }
 
-export function draftToEntry(draft: ParsedDraft, source: Entry["source"]): Entry {
-  const pending = draft.status === "a_receber" || draft.status === "a_pagar";
+function draftPricing(draft: ParsedDraft) {
   const qty = draft.quantidade && draft.quantidade > 0 ? draft.quantidade : 1;
   const unit = draft.precoUnitario != null ? draft.precoUnitario : draft.valor;
   const { liquido } = calcEntryTotal({
@@ -110,6 +117,22 @@ export function draftToEntry(draft: ParsedDraft, source: Entry["source"]): Entry
     descontoValor: draft.descontoValor,
     valor: draft.valor,
   });
+  return { qty, unit, liquido };
+}
+
+/** Divide centavos: primeiras parcelas arredondadas; a última absorve o residual. */
+export function splitEqualCents(total: number, parts: number): number[] {
+  const n = Math.max(1, Math.floor(parts));
+  const cents = Math.round(Math.max(0, total) * 100);
+  const base = Math.floor(cents / n);
+  const rem = cents - base * n;
+  return Array.from({ length: n }, (_, i) => (base + (i < rem ? 1 : 0)) / 100);
+}
+
+export function draftToEntry(draft: ParsedDraft, source: Entry["source"], valorOverride?: number): Entry {
+  const pending = draft.status === "a_receber" || draft.status === "a_pagar";
+  const { qty, unit, liquido } = draftPricing(draft);
+  const valor = valorOverride != null ? valorOverride : liquido;
   return {
     id: uid("lan"),
     data: draft.data,
@@ -117,7 +140,7 @@ export function draftToEntry(draft: ParsedDraft, source: Entry["source"]): Entry
     documento: draft.documento,
     kind: draft.kind,
     revenueKind: draft.revenueKind,
-    valor: liquido,
+    valor,
     descricao: draft.descricao,
     status: draft.status,
     documentoFiscal: draft.documentoFiscal,
@@ -131,6 +154,72 @@ export function draftToEntry(draft: ParsedDraft, source: Entry["source"]): Entry
     descontoTipo: draft.descontoTipo ?? "reais",
     descontoValor: draft.descontoValor ?? 0,
   };
+}
+
+/**
+ * À vista → 1 lançamento.
+ * Parcelado → entrada liquidada (se > 0) + N contas a receber/pagar iguais a cada 30 dias.
+ */
+export function draftToEntries(draft: ParsedDraft, source: Entry["source"]): Entry[] {
+  if (draft.pagamentoModo !== "parcelado") {
+    return [draftToEntry(draft, source)];
+  }
+
+  const { liquido } = draftPricing(draft);
+  const n = Math.max(1, Math.floor(draft.numParcelas || 1));
+  const entrada = Math.max(0, Math.min(draft.valorEntrada || 0, liquido));
+  const saldo = Math.round((liquido - entrada) * 100) / 100;
+  const pendingStatus: PaymentStatus = draft.kind === "venda" ? "a_receber" : "a_pagar";
+  const firstDue = draft.vencimento || draft.data;
+  const baseDesc = (draft.descricao || "").trim();
+  const out: Entry[] = [];
+
+  if (entrada > 0) {
+    out.push({
+      ...draftToEntry(
+        {
+          ...draft,
+          status: "liquidado",
+          vencimento: undefined,
+          descricao: baseDesc ? `${baseDesc} · entrada` : "Entrada",
+        },
+        source,
+        entrada,
+      ),
+      quantidade: 1,
+      precoUnitario: entrada,
+      descontoTipo: "reais",
+      descontoValor: 0,
+    });
+  }
+
+  if (saldo <= 0) return out.length ? out : [draftToEntry(draft, source)];
+
+  const parts = splitEqualCents(saldo, n);
+  parts.forEach((valor, i) => {
+    const vencimento = addDaysIso(firstDue, i * 30);
+    out.push({
+      ...draftToEntry(
+        {
+          ...draft,
+          status: pendingStatus,
+          vencimento,
+          descricao: baseDesc
+            ? `${baseDesc} · parcela ${i + 1}/${n}`
+            : `Parcela ${i + 1}/${n}`,
+          documento: draft.documento ? `${draft.documento} ${i + 1}/${n}` : `${i + 1}/${n}`,
+        },
+        source,
+        valor,
+      ),
+      quantidade: 1,
+      precoUnitario: valor,
+      descontoTipo: "reais",
+      descontoValor: 0,
+    });
+  });
+
+  return out;
 }
 
 export function entryToDraft(entry: Entry): ParsedDraft {

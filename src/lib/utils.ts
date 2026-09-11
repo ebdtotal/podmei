@@ -48,6 +48,13 @@ export function todayIso() {
   return isoDate(new Date());
 }
 
+/** Soma dias a uma data ISO (YYYY-MM-DD), meio-dia local para evitar fuso. */
+export function addDaysIso(iso: string, days: number) {
+  const d = new Date(`${iso.slice(0, 10)}T12:00:00`);
+  d.setDate(d.getDate() + days);
+  return isoDate(d);
+}
+
 export function currentYear() {
   return new Date().getFullYear();
 }

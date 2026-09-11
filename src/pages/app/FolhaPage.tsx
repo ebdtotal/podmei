@@ -343,7 +343,7 @@ export function FolhaPage() {
         </>
       )}
       {display && employee ? (
-        <div className="pointer-events-none fixed top-0 -left-[14000px] w-[718px]" aria-hidden>
+        <div className="pdf-capture-host" aria-hidden>
           <FolhaPrintSheet
             company={company}
             employee={employee}
