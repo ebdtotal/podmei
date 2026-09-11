@@ -12,17 +12,19 @@ const ISENTO_OBRIGATORIO = 200_000;
 
 function dasMonthsInYear(company: Company, year: number) {
   const today = new Date();
-  if (year > today.getFullYear()) return 0;
+  if (year > today.getFullYear()) return [];
   const opened = company.dataAbertura || "";
   const openedYear = Number(opened.slice(0, 4));
   const openedMonth = Number(opened.slice(5, 7));
   let start = 0;
   if (openedYear && openedMonth) {
-    if (openedYear > year) return 0;
+    if (openedYear > year) return [];
     if (openedYear === year) start = openedMonth - 1;
   }
   const end = year < today.getFullYear() ? 11 : today.getMonth();
-  return Math.max(0, end - start + 1);
+  const months: number[] = [];
+  for (let month = start; month <= end; month += 1) months.push(month);
+  return months;
 }
 
 export function IrpfPage() {
@@ -34,9 +36,12 @@ export function IrpfPage() {
 
   const report = useMemo(() => {
     const split = irpfSplit(yearEntries(entries, year));
-    const months = dasMonthsInYear(company, year);
-    const inssMes = dasBreakdown(resolveDasPerfil(company)).inss;
-    const inss = Math.round(months * inssMes * 100) / 100;
+    const monthList = dasMonthsInYear(company, year);
+    const perfil = resolveDasPerfil(company);
+    const inssParts = monthList.map((month) => dasBreakdown(perfil, year, month).inss);
+    const inss = Math.round(inssParts.reduce((acc, value) => acc + value, 0) * 100) / 100;
+    const months = monthList.length;
+    const inssMes = months ? inssParts[inssParts.length - 1] : dasBreakdown(perfil, year, 0).inss;
     const precisa =
       split.tributavel > IRPF_LIMITE || split.isento > ISENTO_OBRIGATORIO;
     const motivo = precisa
@@ -107,7 +112,7 @@ export function IrpfPage() {
           <Field k="Valor" v={`${formatMoney(report.tributavel)} (rendimento tributável)`} />
           <Field
             k="INSS"
-            v={`${formatMoney(report.inss)} (soma do INSS dos DAS de ${year}: ${report.months} × ${formatMoney(report.inssMes)})`}
+            v={`${formatMoney(report.inss)} (soma do INSS dos DAS de ${year}, pelo salário mínimo daquele ano)`}
           />
         </section>
 

@@ -2,6 +2,29 @@ import type { Company, CompanyType, DasPerfil, Entry } from "./types";
 import { isoDate, todayIso } from "./utils";
 
 export const SALARIO_MINIMO = 1_621;
+
+/** Salário mínimo nacional vigente na competência (mês 0–11). Fonte: decretos/MPs do governo federal. */
+const SALARIO_MINIMO_VIGENCIA = [
+  { year: 2019, month: 0, value: 998 },
+  { year: 2020, month: 0, value: 1039 },
+  { year: 2020, month: 1, value: 1045 },
+  { year: 2021, month: 0, value: 1100 },
+  { year: 2022, month: 0, value: 1212 },
+  { year: 2023, month: 0, value: 1302 },
+  { year: 2023, month: 4, value: 1320 },
+  { year: 2024, month: 0, value: 1412 },
+  { year: 2025, month: 0, value: 1518 },
+  { year: 2026, month: 0, value: 1621 },
+];
+
+export function salarioMinimo(year: number, month = 0) {
+  let value = SALARIO_MINIMO_VIGENCIA[0]?.value ?? SALARIO_MINIMO;
+  for (const item of SALARIO_MINIMO_VIGENCIA) {
+    if (item.year < year || (item.year === year && item.month <= month)) value = item.value;
+    else break;
+  }
+  return value;
+}
 export const INSS_MEI = 0.05;
 export const INSS_CAMINHONEIRO = 0.12;
 export const ICMS_MEI = 1;
@@ -26,15 +49,16 @@ export function resolveDasPerfil(company: Company): DasPerfil {
   return company.dasPerfil ?? dasPerfilFromTipo(company.tipo);
 }
 
-export function dasBreakdown(perfil: DasPerfil) {
+export function dasBreakdown(perfil: DasPerfil, year?: number, month = 0) {
+  const minimo = year == null ? SALARIO_MINIMO : salarioMinimo(year, month);
   const caminhoneiro = perfil === "caminhoneiro" || perfil === "caminhoneiro_servicos";
-  const inss = round2(SALARIO_MINIMO * (caminhoneiro ? INSS_CAMINHONEIRO : INSS_MEI));
+  const inss = round2(minimo * (caminhoneiro ? INSS_CAMINHONEIRO : INSS_MEI));
   const icms =
     perfil === "comercio" || perfil === "misto" || perfil === "caminhoneiro" || perfil === "caminhoneiro_servicos"
       ? ICMS_MEI
       : 0;
   const iss = perfil === "servicos" || perfil === "misto" || perfil === "caminhoneiro_servicos" ? ISS_MEI : 0;
-  return { inss, icms, iss, total: round2(inss + icms + iss) };
+  return { inss, icms, iss, total: round2(inss + icms + iss), salarioMinimo: minimo };
 }
 
 export function dasDueDate(year: number, month: number) {

@@ -11,7 +11,7 @@ import {
   dasPerfilFromTipo,
   dasPerfilLabel,
   resolveDasPerfil,
-  SALARIO_MINIMO,
+  salarioMinimo,
 } from "@/lib/das";
 import { GOV_LINKS } from "@/lib/mei";
 import { printOrSharePdf } from "@/lib/print";
@@ -40,7 +40,7 @@ export function DasPage() {
   const [year, setYear] = useState(currentYear());
   const years = Array.from({ length: 8 }, (_, i) => currentYear() - i);
   const perfil = resolveDasPerfil(company);
-  const calc = dasBreakdown(perfil);
+  const calc = dasBreakdown(perfil, year, year === currentYear() ? new Date().getMonth() : 11);
   const paid = useMemo(() => dasPaidMap(entries), [entries]);
   const [saved, setSaved] = useState("");
   const [payForm, setPayForm] = useState<PayForm | null>(null);
@@ -81,7 +81,7 @@ export function DasPage() {
     setPayForm({
       month,
       paidAt: todayIso(),
-      valorDas: calc.total,
+      valorDas: dasBreakdown(perfil, year, month).total,
       juros: 0,
       multa: 0,
     });
@@ -133,7 +133,7 @@ export function DasPage() {
         <div>
           <h1 className="font-display text-3xl text-ink">Emissão do DAS</h1>
           <p className="mt-1 max-w-2xl text-sm text-mute">
-            O boleto oficial só sai no PGMEI da Receita. Aqui você calcula o valor 2026, controla as competências e
+            O boleto oficial só sai no PGMEI da Receita. Aqui você calcula o valor do ano selecionado, controla as competências e
             lança o pagamento no livro-caixa — inclusive com juros e multa de atraso.
           </p>
         </div>
@@ -168,7 +168,9 @@ export function DasPage() {
 
       <div className="grid gap-4 lg:grid-cols-3">
         <section className="rounded-2xl bg-navy p-5 text-white lg:col-span-2">
-          <p className="text-xs text-gold">Valor estimado · salário mínimo {formatMoney(SALARIO_MINIMO)}</p>
+          <p className="text-xs text-gold">
+            Valor estimado {year} · salário mínimo {formatMoney(salarioMinimo(year, year === currentYear() ? new Date().getMonth() : 11))}
+          </p>
           <p className="mt-2 font-display text-4xl">{formatMoney(calc.total)}</p>
           <p className="mt-1 text-sm text-white/70">{dasPerfilLabel[perfil]}</p>
           <dl className="mt-5 grid gap-3 sm:grid-cols-3">
@@ -313,7 +315,7 @@ export function DasPage() {
                     {MONTHS[row.month]}/{year}
                   </td>
                   <td>{formatDate(row.due)}</td>
-                  <td>{formatMoney(row.entry?.valor ?? calc.total)}</td>
+                  <td>{formatMoney(row.entry?.valor ?? dasBreakdown(perfil, year, row.month).total)}</td>
                   <td>
                     {row.entry ? (
                       <span className="rounded-full bg-green/15 px-2 py-0.5 text-xs font-semibold text-green">
@@ -359,7 +361,7 @@ export function DasPage() {
           <Row k="Total mensal" v={formatMoney(calc.total)} />
         </div>
         <p className="mt-6 text-xs text-mute">
-          Base: Decreto do salário mínimo (R$ 1.621,00 em 2026) e LC 123/2006. Emita e pague somente no portal oficial
+          Base: salário mínimo de {year} ({formatMoney(calc.salarioMinimo)}) e LC 123/2006. Emita e pague somente no portal oficial
           da Receita Federal.
         </p>
       </article>

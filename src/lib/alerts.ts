@@ -31,7 +31,7 @@ export function buildAlerts(company: Company, entries: Entry[], today = todayIso
   const paid = dasPaidMap(entries);
   const year = Number(today.slice(0, 4));
   const perfil = resolveDasPerfil(company);
-  const total = dasBreakdown(perfil).total;
+  const totalFor = (y: number, month: number) => dasBreakdown(perfil, y, month).total;
   const nome = company.nome || "sua empresa";
 
   for (const y of [year - 1, year]) {
@@ -52,8 +52,8 @@ export function buildAlerts(company: Company, entries: Entry[], today = todayIso
         level: late ? "danger" : "warn",
         title: late ? `DAS de ${ref} em atraso` : `DAS de ${ref} vence em ${days === 0 ? "hoje" : `${days} dia${days === 1 ? "" : "s"}`}`,
         body: late
-          ? `${nome}: competência em aberto. Venceu em ${formatDate(due)}. Valor estimado ${formatMoney(total)}.`
-          : `${nome}: emita a guia até ${formatDate(due)}. Valor estimado ${formatMoney(total)}. Ainda não há pagamento lançado.`,
+          ? `${nome}: competência em aberto. Venceu em ${formatDate(due)}. Valor estimado ${formatMoney(totalFor(y, month))}.`
+          : `${nome}: emita a guia até ${formatDate(due)}. Valor estimado ${formatMoney(totalFor(y, month))}. Ainda não há pagamento lançado.`,
         href: "/app/das",
       });
     }
