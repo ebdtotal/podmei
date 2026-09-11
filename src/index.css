@@ -153,6 +153,17 @@ body {
     margin: 0 !important;
   }
 
+  html.dark {
+    --brand-ink: #0f172a;
+    --brand-mute: #64748b;
+    --brand-line: #e5e7eb;
+    --brand-bg: #ffffff;
+    --brand-paper: #ffffff;
+    --brand-navy: #7b2cf5;
+    --brand-navy-2: #2563eb;
+    --brand-gold: #22c55e;
+  }
+
   .print-sheet {
     display: block !important;
     width: 190mm !important;
@@ -163,6 +174,7 @@ body {
     border: none !important;
     border-radius: 0 !important;
     background: white !important;
+    color: #0f172a !important;
     page-break-after: avoid !important;
     page-break-inside: auto !important;
     break-after: avoid-page !important;

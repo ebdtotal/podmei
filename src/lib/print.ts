@@ -71,40 +71,50 @@ function buildA4PdfFromCanvas(canvas: HTMLCanvasElement): jsPDF {
   return pdf;
 }
 
-/**
- * Gera PDF A4 a partir da área `.print-sheet` (web e app).
- * Web: baixa o arquivo. App: abre compartilhar/salvar.
- */
-export async function printOrSharePdf(filename = "podmei-relatorio.pdf") {
-  const sheet = document.querySelector(".print-sheet") as HTMLElement | null;
-  if (!sheet) {
-    window.alert("Nada para gerar em PDF nesta tela.");
-    return;
+function revealPrintOnly(root: HTMLElement) {
+  root.querySelectorAll(".hidden").forEach((el) => {
+    if ([...el.classList].some((name) => name === "print:block" || name.startsWith("print:"))) {
+      el.classList.remove("hidden");
+    }
+  });
+}
+
+/** Captura a folha num iframe claro, para o tema escuro não pintar o PDF. */
+async function captureLightSheet(sheet: HTMLElement): Promise<HTMLCanvasElement> {
+  const iframe = document.createElement("iframe");
+  iframe.setAttribute("aria-hidden", "true");
+  iframe.style.cssText =
+    "position:fixed;left:-12000px;top:0;width:900px;height:1600px;border:0;background:#ffffff;";
+  document.body.appendChild(iframe);
+  const doc = iframe.contentDocument;
+  if (!doc) {
+    iframe.remove();
+    throw new Error("Não foi possível preparar o PDF.");
   }
 
-  const prev = {
-    width: sheet.style.width,
-    maxWidth: sheet.style.maxWidth,
-    margin: sheet.style.margin,
-    boxShadow: sheet.style.boxShadow,
-    borderRadius: sheet.style.borderRadius,
-    border: sheet.style.border,
-    background: sheet.style.background,
-  };
+  document.querySelectorAll('link[rel="stylesheet"], style').forEach((node) => {
+    doc.head.appendChild(node.cloneNode(true));
+  });
+  const extra = doc.createElement("style");
+  extra.textContent = "html,body{margin:0;background:#fff;color:#0f172a}";
+  doc.head.appendChild(extra);
+
+  const clone = sheet.cloneNode(true) as HTMLElement;
+  revealPrintOnly(clone);
+  clone.style.width = `${CAPTURE_WIDTH_PX}px`;
+  clone.style.maxWidth = `${CAPTURE_WIDTH_PX}px`;
+  clone.style.margin = "0";
+  clone.style.boxShadow = "none";
+  clone.style.borderRadius = "0";
+  clone.style.border = "none";
+  clone.style.background = "#ffffff";
+  clone.style.color = "#0f172a";
+  doc.body.appendChild(clone);
+
+  await new Promise((r) => setTimeout(r, 40));
 
   try {
-    sheet.style.width = `${CAPTURE_WIDTH_PX}px`;
-    sheet.style.maxWidth = `${CAPTURE_WIDTH_PX}px`;
-    sheet.style.margin = "0 auto";
-    sheet.style.boxShadow = "none";
-    sheet.style.borderRadius = "0";
-    sheet.style.border = "none";
-    sheet.style.background = "#ffffff";
-
-    // Espera layout aplicar a largura A4 antes de capturar.
-    await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
-
-    const canvas = await html2canvas(sheet, {
+    return await html2canvas(clone, {
       scale: 2,
       useCORS: true,
       allowTaint: true,
@@ -113,19 +123,28 @@ export async function printOrSharePdf(filename = "podmei-relatorio.pdf") {
       width: CAPTURE_WIDTH_PX,
       windowWidth: CAPTURE_WIDTH_PX,
     });
+  } finally {
+    iframe.remove();
+  }
+}
 
+/**
+ * Gera PDF A4 claro a partir da área `.print-sheet` (web e app).
+ * O tema escuro da tela não entra no arquivo.
+ */
+export async function printOrSharePdf(filename = "podmei-relatorio.pdf") {
+  const sheet = document.querySelector(".print-sheet") as HTMLElement | null;
+  if (!sheet) {
+    window.alert("Nada para gerar em PDF nesta tela.");
+    return;
+  }
+
+  try {
+    const canvas = await captureLightSheet(sheet);
     const pdf = buildA4PdfFromCanvas(canvas);
     await saveOrSharePdf(pdf, filename.endsWith(".pdf") ? filename : `${filename}.pdf`);
   } catch (err) {
     if (isShareCancel(err)) return;
     window.alert(err instanceof Error ? err.message : "Não foi possível gerar o PDF A4.");
-  } finally {
-    sheet.style.width = prev.width;
-    sheet.style.maxWidth = prev.maxWidth;
-    sheet.style.margin = prev.margin;
-    sheet.style.boxShadow = prev.boxShadow;
-    sheet.style.borderRadius = prev.borderRadius;
-    sheet.style.border = prev.border;
-    sheet.style.background = prev.background;
   }
 }

@@ -43,6 +43,10 @@ export interface Company {
   limiteFaturamento: number;
   dasPerfil?: DasPerfil;
   logoDataUrl?: string;
+  /** Nome de quem assina o recibo. */
+  responsavel?: string;
+  /** Opcional. Só entra na faixa do recibo se estiver preenchido. */
+  instagram?: string;
   /** Chave Pix do MEI — usada na cobrança de contas a receber. */
   pixChave?: string;
 }

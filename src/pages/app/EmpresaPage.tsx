@@ -167,13 +167,16 @@ export function EmpresaPage() {
 
       <section className="rounded-2xl border border-line bg-paper p-5">
         <h2 className="text-sm font-semibold">Logo da empresa</h2>
-        <p className="mt-1 text-xs text-mute">PNG, JPG ou WEBP. A imagem entra no cabeçalho e no rodapé do recibo em PDF.</p>
+        <p className="mt-1 text-xs text-mute">
+          PNG com fundo transparente, horizontal. Tamanho ideal: <strong className="text-ink">720 × 200 px</strong>{" "}
+          (proporção 3,6:1). A faixa do recibo usa até 78 mm de largura e 22 mm de altura, sem esticar a imagem.
+        </p>
         <div className="mt-4 flex flex-wrap items-center gap-4">
-          <div className="grid size-24 place-items-center overflow-hidden rounded-xl border border-line bg-bg">
+          <div className="grid h-[72px] w-[260px] place-items-center overflow-hidden rounded-xl bg-[#070b14] px-3">
             {form.logoDataUrl ? (
-              <img src={form.logoDataUrl} alt="Logo da empresa" className="max-h-24 max-w-24 object-contain" />
+              <img src={form.logoDataUrl} alt="Logo da empresa" className="max-h-[52px] max-w-[230px] object-contain" />
             ) : (
-              <span className="px-2 text-center text-[11px] text-mute">Sem logo</span>
+              <span className="px-2 text-center text-[11px] text-white/70">720 × 200 px</span>
             )}
           </div>
           <div className="flex flex-wrap gap-2">
@@ -213,11 +216,27 @@ export function EmpresaPage() {
           <Field label="Nome da empresa">
             <input className="input" value={form.nome} onChange={(e) => patch("nome", e.target.value)} />
           </Field>
+          <Field label="Responsável (recibo)">
+            <input
+              className="input"
+              placeholder="Nome de quem assina"
+              value={form.responsavel ?? ""}
+              onChange={(e) => patch("responsavel", e.target.value)}
+            />
+          </Field>
           <Field label="Telefone">
             <input className="input" value={form.telefone} onChange={(e) => patch("telefone", e.target.value)} />
           </Field>
           <Field label="E-mail">
             <input className="input" value={form.email} onChange={(e) => patch("email", e.target.value)} />
+          </Field>
+          <Field label="Instagram (recibo, opcional)">
+            <input
+              className="input"
+              placeholder="@seuperfil"
+              value={form.instagram ?? ""}
+              onChange={(e) => patch("instagram", e.target.value)}
+            />
           </Field>
           <Field label="Chave Pix (cobrança)">
             <input
@@ -552,8 +571,9 @@ function fileToLogoDataUrl(file: File) {
     reader.onload = () => {
       const img = new Image();
       img.onload = () => {
-        const max = 480;
-        const scale = Math.min(1, max / Math.max(img.width, img.height));
+        const maxW = 960;
+        const maxH = 280;
+        const scale = Math.min(1, maxW / img.width, maxH / img.height);
         const canvas = document.createElement("canvas");
         canvas.width = Math.max(1, Math.round(img.width * scale));
         canvas.height = Math.max(1, Math.round(img.height * scale));
@@ -562,8 +582,7 @@ function fileToLogoDataUrl(file: File) {
           resolve(String(reader.result));
           return;
         }
-        ctx.fillStyle = "#ffffff";
-        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
         ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
         resolve(canvas.toDataURL("image/png"));
       };

@@ -21,13 +21,13 @@ export function RecibosPage() {
           <img
             src={company.logoDataUrl}
             alt="Logo no recibo"
-            className="h-14 w-14 rounded-lg border border-line bg-paper object-contain p-1"
+            className="h-14 w-40 rounded-lg bg-[#070b14] object-contain px-2"
           />
         ) : null}
       </div>
       {!company.logoDataUrl ? (
         <p className="rounded-xl border border-gold bg-paper px-4 py-3 text-sm">
-          Ainda não há logo no cadastro.{" "}
+          Use PNG transparente, 720 × 200 px. Ainda não há logo no cadastro.{" "}
           <Link to="/app/empresa" className="font-semibold text-ink underline">
             Suba a logo em Empresa
           </Link>{" "}

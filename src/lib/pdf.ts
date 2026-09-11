@@ -3,93 +3,120 @@ import type { Company, Entry } from "./types";
 import { formatDate, formatMoney } from "./utils";
 import { saveOrSharePdf } from "./print";
 
+const BAND = { r: 7, g: 11, b: 20 };
+const GOLD = { r: 230, g: 179, b: 37 };
+const INK = { r: 15, g: 23, b: 42 };
+
+type LogoSize = { dataUrl: string; format: "PNG" | "JPEG"; w: number; h: number };
+
+function imageFormat(dataUrl: string): "PNG" | "JPEG" {
+  return dataUrl.includes("image/png") ? "PNG" : "JPEG";
+}
+
+function loadLogo(dataUrl: string): Promise<LogoSize> {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.onload = () => {
+      const maxW = 78;
+      const maxH = 22;
+      const scale = Math.min(maxW / img.naturalWidth, maxH / img.naturalHeight);
+      resolve({
+        dataUrl,
+        format: imageFormat(dataUrl),
+        w: img.naturalWidth * scale,
+        h: img.naturalHeight * scale,
+      });
+    };
+    img.onerror = () => reject(new Error("logo"));
+    img.src = dataUrl;
+  });
+}
+
+function headerLines(company: Company) {
+  const lines: string[] = [];
+  if (company.cnpj.trim()) lines.push(`CNPJ: ${company.cnpj.trim()}`);
+  if (company.telefone.trim()) lines.push(`WHATSAPP: ${company.telefone.trim()}`);
+  if (company.email.trim()) lines.push(`E-MAIL: ${company.email.trim()}`);
+  if (company.instagram?.trim()) lines.push(`INSTAGRAM ${company.instagram.trim()}`);
+  return lines;
+}
+
 export async function downloadReciboPdf(company: Company, entry: Entry) {
   const doc = new jsPDF({ unit: "mm", format: "a4" });
-  const w = 210;
+  const pageW = 210;
+  const left = 14;
+  const right = pageW - 14;
 
-  doc.setFillColor(123, 44, 245);
-  doc.rect(0, 0, w, 32, "F");
+  const lines = headerLines(company);
+  const logo = company.logoDataUrl
+    ? await loadLogo(company.logoDataUrl).catch(() => null)
+    : null;
+  const textBlock = 6 + lines.length * 4.4;
+  const bandH = Math.max(34, (logo?.h ?? 0) + 12, textBlock + 10);
 
-  if (company.logoDataUrl) {
+  doc.setFillColor(BAND.r, BAND.g, BAND.b);
+  doc.rect(0, 0, pageW, bandH, "F");
+
+  if (logo) {
+    const y = (bandH - logo.h) / 2;
     try {
-      const format = company.logoDataUrl.includes("image/png") ? "PNG" : "JPEG";
-      doc.addImage(company.logoDataUrl, format, 14, 5, 22, 22);
+      doc.addImage(logo.dataUrl, logo.format, left, y, logo.w, logo.h);
     } catch {
-      /* logo inválida: segue o recibo sem imagem */
+      /* logo inválida */
     }
   }
 
-  const titleX = company.logoDataUrl ? 40 : 14;
-  doc.setTextColor(34, 197, 94);
-  doc.setFont("helvetica", "bold");
-  doc.setFontSize(16);
-  doc.text(company.nome || "POD MEI", titleX, 14, { maxWidth: 150 });
   doc.setTextColor(255, 255, 255);
-  doc.setFontSize(10);
-  doc.text("RECIBO DE PRESTAÇÃO DE SERVIÇO / VENDA", titleX, 22);
-
-  doc.setTextColor(18, 32, 51);
-  doc.setFontSize(11);
   doc.setFont("helvetica", "bold");
-  doc.text("Emitente", 14, 46);
-  doc.setFont("helvetica", "normal");
-  doc.setFontSize(10);
-  const emitente = [
-    company.nome,
-    `CNPJ ${company.cnpj}`,
-    `${company.endereco} — ${company.bairro}`,
-    `${company.cidade}/${company.uf}`,
-    `${company.telefone} · ${company.email}`,
-  ];
-  emitente.forEach((line, i) => doc.text(line, 14, 54 + i * 6));
-
-  doc.setDrawColor(215, 222, 234);
-  doc.line(14, 88, 196, 88);
-
-  doc.setFont("helvetica", "bold");
-  doc.setFontSize(12);
-  doc.text("Recebemos de", 14, 100);
-  doc.setFont("helvetica", "normal");
-  doc.setFontSize(11);
-  doc.text(entry.contraparte, 14, 108);
-
-  doc.setFont("helvetica", "bold");
-  doc.text("A importância de", 14, 122);
-  doc.setFontSize(16);
-  doc.setTextColor(11, 31, 74);
-  doc.text(formatMoney(entry.valor), 14, 132);
-  doc.setTextColor(18, 32, 51);
-  doc.setFont("helvetica", "normal");
-  doc.setFontSize(11);
-  doc.text(`Referente a: ${entry.descricao}`, 14, 144);
-  doc.text(`Documento: ${entry.documento}`, 14, 152);
-  doc.text(`Forma de pagamento: ${entry.formaPagamento.toUpperCase()}`, 14, 160);
-  doc.text(`Data: ${formatDate(entry.data)}`, 14, 168);
-  doc.text(`Documento fiscal: ${entry.documentoFiscal ? "SIM" : "NÃO"}`, 14, 176);
-
-  doc.setFillColor(244, 246, 251);
-  doc.rect(14, 190, 182, 28, "F");
   doc.setFontSize(9);
-  doc.text(
-    "Este recibo comprova o recebimento do valor acima. Guarde junto ao Relatório Mensal das Receitas Brutas do MEI.",
-    18,
-    200,
-    { maxWidth: 174 },
-  );
+  const nameY = (bandH - textBlock) / 2 + 4;
+  const name = (company.nome || "Empresa").toUpperCase();
+  const nameLines = doc.splitTextToSize(name, 88);
+  doc.text(nameLines, right, nameY, { align: "right" });
 
-  if (company.logoDataUrl) {
-    try {
-      const format = company.logoDataUrl.includes("image/png") ? "PNG" : "JPEG";
-      doc.addImage(company.logoDataUrl, format, 14, 228, 16, 16);
-    } catch {
-      /* ignore */
-    }
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(8);
+  doc.setTextColor(GOLD.r, GOLD.g, GOLD.b);
+  lines.forEach((line, i) => {
+    doc.text(line, right, nameY + nameLines.length * 4.2 + 2 + i * 4.4, { align: "right" });
+  });
+
+  doc.setTextColor(INK.r, INK.g, INK.b);
+  doc.setFont("times", "bold");
+  doc.setFontSize(22);
+  doc.text("RECIBO", pageW / 2, bandH + 16, { align: "center" });
+
+  const responsavel = company.responsavel?.trim();
+  const empresa = company.nome?.trim() || "a empresa";
+  const cnpj = company.cnpj.trim() || "CNPJ não informado";
+  const quem = [responsavel, empresa].filter(Boolean).join(" ");
+  const cliente = entry.contraparte.trim() || "o cliente";
+  const descricao = entry.descricao.trim() || "o serviço";
+
+  const paragrafos = [
+    `Pelo presente, eu ${quem} inscrita no CNPJ ${cnpj} declaro que RECEBI no dia ${formatDate(entry.data)}, o valor de ${formatMoney(entry.valor)}, de ${cliente}.`,
+    `Declaro ainda que o valor recebido se refere-se a ${descricao} do lançamento.`,
+    "Sendo expressão de verdade e sem qualquer coação, firmo o presente.",
+  ];
+
+  doc.setFont("times", "normal");
+  doc.setFontSize(12);
+  let y = bandH + 30;
+  for (const paragrafo of paragrafos) {
+    const wrapped = doc.splitTextToSize(paragrafo, 170);
+    doc.text(wrapped, left, y);
+    y += wrapped.length * 6.4 + 6;
   }
 
-  doc.line(120, 244, 196, 244);
+  const signY = Math.max(y + 18, 230);
+  doc.setDrawColor(INK.r, INK.g, INK.b);
+  doc.line(120, signY, right, signY);
+  doc.setFont("times", "normal");
+  doc.setFontSize(10);
+  doc.text(responsavel || empresa, 120, signY + 6, { maxWidth: 76 });
   doc.setFontSize(9);
-  doc.text(company.nome, 120, 250, { maxWidth: 76 });
-  doc.text("Assinatura do empresário", 120, 256);
+  doc.setTextColor(100, 116, 139);
+  doc.text("Assinatura", 120, signY + 11);
 
   await saveOrSharePdf(doc, `recibo-${entry.data}-${entry.id}.pdf`);
 }
