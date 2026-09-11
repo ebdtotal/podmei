@@ -8,7 +8,8 @@ import { plans } from "@/lib/plans";
 import { platform, type AccountantInvite } from "@/lib/platform";
 import type { Subscription } from "@/lib/platform-types";
 import { useStore } from "@/lib/store";
-import type { Company, CompanyType, DasPerfil } from "@/lib/types";
+import type { Company, CompanyType, DasPerfil, PixTipo } from "@/lib/types";
+import { inferPixTipo, normalizePixKey, pixTipoLabel } from "@/lib/charge";
 import { stripLogoBackground } from "@/lib/logo";
 import { formatMoney } from "@/lib/utils";
 
@@ -98,6 +99,23 @@ export function EmpresaPage() {
 
   function patch<K extends keyof Company>(key: K, value: Company[K]) {
     setForm((prev) => ({ ...prev, [key]: value }));
+  }
+
+  function setPixTipo(tipo: PixTipo) {
+    setForm((prev) => {
+      let chave = prev.pixChave ?? "";
+      if (tipo === "cnpj") {
+        const digits = chave.replace(/\D/g, "");
+        chave = digits.length === 14 ? digits : (prev.cnpj || "").replace(/\D/g, "");
+      } else if (tipo === "cpf") {
+        chave = chave.replace(/\D/g, "");
+      } else if (tipo === "telefone" && !chave.replace(/\D/g, "")) {
+        chave = prev.telefone || "";
+      } else if (tipo === "email" && !chave.includes("@")) {
+        chave = prev.email || "";
+      }
+      return { ...prev, pixTipo: tipo, pixChave: chave };
+    });
   }
 
   async function onChangePassword(e: FormEvent) {
@@ -255,14 +273,58 @@ export function EmpresaPage() {
               onChange={(e) => patch("instagram", e.target.value)}
             />
           </Field>
-          <Field label="Chave Pix (cobrança)">
-            <input
-              className="input"
-              placeholder="CPF, CNPJ, e-mail, telefone ou aleatória"
-              value={form.pixChave ?? ""}
-              onChange={(e) => patch("pixChave", e.target.value)}
-            />
-          </Field>
+          <div className="md:col-span-2">
+            <p className="text-xs font-medium text-mute">Chave Pix (cobrança)</p>
+            <div className="mt-1.5 flex flex-wrap gap-2">
+              {(Object.keys(pixTipoLabel) as PixTipo[]).map((tipo) => {
+                const selected = (form.pixTipo || inferPixTipo(form.pixChave || "")) === tipo;
+                return (
+                  <button
+                    key={tipo}
+                    type="button"
+                    className={selected ? "btn-primary !px-3 !py-1.5 text-xs" : "btn-ghost !px-3 !py-1.5 text-xs"}
+                    onClick={() => setPixTipo(tipo)}
+                  >
+                    {pixTipoLabel[tipo]}
+                  </button>
+                );
+              })}
+            </div>
+            {(form.pixTipo || inferPixTipo(form.pixChave || "")) === "copia_e_cola" ? (
+              <textarea
+                className="input mt-2 min-h-24"
+                placeholder="Cole aqui o Pix copia e cola"
+                value={form.pixChave ?? ""}
+                onChange={(e) => patch("pixChave", e.target.value)}
+              />
+            ) : (
+              <input
+                className="input mt-2"
+                inputMode={
+                  (form.pixTipo || inferPixTipo(form.pixChave || "")) === "email"
+                    ? "email"
+                    : (form.pixTipo || inferPixTipo(form.pixChave || "")) === "telefone"
+                      ? "tel"
+                      : "numeric"
+                }
+                placeholder={pixPlaceholder(form.pixTipo || inferPixTipo(form.pixChave || ""))}
+                value={form.pixChave ?? ""}
+                onChange={(e) => patch("pixChave", e.target.value)}
+              />
+            )}
+            {(form.pixTipo || inferPixTipo(form.pixChave || "")) === "cnpj" ? (
+              <button
+                type="button"
+                className="btn-ghost mt-2 text-xs"
+                onClick={() => patch("pixChave", (form.cnpj || "").replace(/\D/g, ""))}
+              >
+                Usar CNPJ da empresa
+              </button>
+            ) : null}
+            <p className="mt-1.5 text-xs text-mute">
+              No WhatsApp a chave vai igual à cadastrada. CNPJ sai só com os números, para o cliente tocar e copiar.
+            </p>
+          </div>
           <Field label="Endereço">
             <input className="input" value={form.endereco} onChange={(e) => patch("endereco", e.target.value)} />
           </Field>
@@ -392,7 +454,12 @@ export function EmpresaPage() {
         type="button"
         className="btn-primary"
         onClick={() => {
-          setCompany(form);
+          const pixTipo = form.pixTipo || inferPixTipo(form.pixChave || "");
+          setCompany({
+            ...form,
+            pixTipo,
+            pixChave: normalizePixKey(pixTipo, form.pixChave || ""),
+          });
           setSaved(true);
         }}
       >
@@ -570,6 +637,14 @@ export function EmpresaPage() {
       ) : null}
     </div>
   );
+}
+
+function pixPlaceholder(tipo: PixTipo) {
+  if (tipo === "cnpj") return "Somente números do CNPJ";
+  if (tipo === "cpf") return "Somente números do CPF";
+  if (tipo === "telefone") return "00 00000-0000";
+  if (tipo === "email") return "email@dominio.com";
+  return "Cole o Pix copia e cola";
 }
 
 function Field({ label, children }: { label: string; children: React.ReactNode }) {

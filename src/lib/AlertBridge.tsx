@@ -1,5 +1,5 @@
 import { useEffect, useRef } from "react";
-import { buildAlerts } from "./alerts";
+import { buildAlerts, visibleAlerts } from "./alerts";
 import { notifyAlerts } from "./notify";
 import { platform } from "./platform";
 import { useStore } from "./store";
@@ -13,7 +13,7 @@ export function AlertBridge() {
 
   useEffect(() => {
     if (!user || user.role === "master") return;
-    const alerts = buildAlerts(company, entries);
+    const alerts = visibleAlerts(buildAlerts(company, entries));
     const stamp = `${user.id}:${alerts.map((a) => a.id).join("|")}`;
     if (ran.current === stamp) return;
     ran.current = stamp;

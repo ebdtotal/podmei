@@ -12,6 +12,7 @@ import { DrePage } from "./pages/app/DrePage";
 import { EmpresaPage } from "./pages/app/EmpresaPage";
 import { FolhaPage } from "./pages/app/FolhaPage";
 import { ExtratoPage } from "./pages/app/ExtratoPage";
+import { IrpfPage } from "./pages/app/IrpfPage";
 import { NfsePage } from "./pages/app/GovPages";
 import { LancamentosPage } from "./pages/app/LancamentosPage";
 import { LimitesPage } from "./pages/app/LimitesPage";
@@ -102,6 +103,7 @@ export default function App() {
         <Route path="whatsapp" element={<Navigate to="/app" replace />} />
         <Route path="das" element={<DasPage />} />
         <Route path="dasn" element={<DasnPage />} />
+        <Route path="irpf" element={<IrpfPage />} />
         <Route path="nfse" element={<NfsePage />} />
         <Route path="planos" element={<Navigate to="/app/empresa" replace />} />
       </Route>

@@ -48,6 +48,7 @@ const reportPaths = [
   "/app/livro-razao",
   "/app/das",
   "/app/dasn",
+  "/app/irpf",
 ];
 
 const mobilePrimary = ["/app", "/app/lancamentos", "/app/contas", "/app/relatorios", "/app/limites"] as const;
@@ -203,7 +204,7 @@ export function AppShell() {
           </div>
         </header>
 
-        <main className="px-4 py-5 pb-[calc(5.5rem+env(safe-area-inset-bottom))] md:px-8 md:py-6 md:pb-8">
+        <main className="min-w-0 px-4 py-5 pb-[calc(5.5rem+env(safe-area-inset-bottom))] md:px-8 md:py-6 md:pb-8">
           <Outlet />
         </main>
       </div>

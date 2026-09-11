@@ -1,8 +1,8 @@
 import { FileSpreadsheet, Landmark, Receipt, Stamp, Users } from "lucide-react";
 import { Link } from "react-router-dom";
+import { useState } from "react";
 import { AlertBanners } from "@/components/alerts/AlertBanners";
-import { TrendChart } from "@/components/charts/TrendChart";
-import { buildAlerts } from "@/lib/alerts";
+import { buildAlerts, dismissAlert, dismissedAlertIds } from "@/lib/alerts";
 import { hasActiveEmployee } from "@/lib/folha";
 import {
   dasnSummary,
@@ -22,9 +22,8 @@ import { cn, currentYear, formatMoney, formatPercent } from "@/lib/utils";
 
 export function DashboardPage() {
   const { company, entries, employee, payrolls, clients, activeClientId } = useStore();
+  const [dismissed, setDismissed] = useState(() => dismissedAlertIds());
   const shared = clients.find((c) => c.id === activeClientId)?.sharedInviteId;
-  const carteiraTo = "/contador";
-  const carteiraLabel = "Carteira do contador";
   const year = currentYear();
   const now = new Date();
   const yearList = yearEntries(entries, year);
@@ -56,17 +55,9 @@ export function DashboardPage() {
             {company.cnpj} · {company.cidade}/{company.uf}
           </p>
         </div>
-        <div className="flex flex-wrap gap-2">
-          <Link to={carteiraTo} className="btn-ghost">
-            {carteiraLabel}
-          </Link>
-          <Link to="/app/relatorio-oficial" className="btn-primary">
-            Relatório de receitas do mês
-          </Link>
-          <Link to="/app/extrato" className="btn-ghost">
-            Importar extrato
-          </Link>
-        </div>
+        <Link to="/app/relatorio-oficial" className="btn-primary">
+          Relatório de receitas do mês
+        </Link>
       </div>
 
       {shared ? (
@@ -75,7 +66,13 @@ export function DashboardPage() {
         </p>
       ) : null}
 
-      <AlertBanners alerts={buildAlerts(company, entries)} />
+      <AlertBanners
+        alerts={buildAlerts(company, entries).filter((alert) => !dismissed.has(alert.id))}
+        onDismiss={(id) => {
+          dismissAlert(id);
+          setDismissed(dismissedAlertIds());
+        }}
+      />
 
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
         <Shortcut to="/app/das" color="bg-orange" icon={Stamp} label="Emitir DAS mensal" />
@@ -134,9 +131,6 @@ export function DashboardPage() {
                 </tr>
               </tbody>
             </table>
-          </div>
-          <div className="mt-4">
-            <TrendChart series={series} highlight={month} />
           </div>
         </section>
 

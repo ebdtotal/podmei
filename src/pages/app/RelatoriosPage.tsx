@@ -1,4 +1,4 @@
-import { BookMarked, BookOpen, FileSpreadsheet, Receipt, Stamp, Users } from "lucide-react";
+import { BookMarked, BookOpen, FileSpreadsheet, FileText, Receipt, Stamp, Users } from "lucide-react";
 import { Link } from "react-router-dom";
 
 const cards = [
@@ -39,6 +39,12 @@ const cards = [
     text: "Totais no formato DASN-SIMEI para conferir antes de transmitir.",
   },
   {
+    to: "/app/irpf",
+    icon: FileText,
+    title: "IRPF",
+    text: "Se precisa declarar e os valores para o programa da Receita, por ano de competência.",
+  },
+  {
     to: "/app/folha",
     icon: Users,
     title: "Folha do colaborador",
@@ -52,7 +58,7 @@ export function RelatoriosPage() {
       <div>
         <h1 className="font-display text-3xl text-ink">Relatórios e obrigações</h1>
         <p className="mt-1 text-sm text-mute">
-          DRE, livros, receitas brutas, DAS, declaração anual e folha do colaborador. O limite de faturamento fica na
+          DRE, livros, receitas brutas, DAS, IRPF, declaração anual e folha do colaborador. O limite de faturamento fica na
           aba Limites.
         </p>
       </div>

@@ -124,6 +124,8 @@ function alert_compute(array $ws, string $today): array {
       if (!empty($paid[$key])) continue;
       $ref = $months[$month] . "/" . $y;
       if ($diff < 0) {
+        // Exercício anterior não gera e-mail de atraso (lançamento retroativo continua permitido).
+        if ($y < $year) continue;
         $late = [
           "key" => "das-late:" . $key,
           "subject" => "DAS de {$ref} em atraso — PODMEI",

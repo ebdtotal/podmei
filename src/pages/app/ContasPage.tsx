@@ -1,6 +1,6 @@
 import { Copy, MessageCircle, Printer } from "lucide-react";
 import { useMemo, useState } from "react";
-import { chargeMessage, chargePhone, pixPayloadForEntry, whatsappHref } from "@/lib/charge";
+import { chargeMessage, chargePhone, pixKeyForCompany, pixPayloadForEntry, resolvePixTipo, whatsappHref } from "@/lib/charge";
 import { printOrSharePdf } from "@/lib/print";
 import { useStore } from "@/lib/store";
 import type { Company, Entry } from "@/lib/types";
@@ -27,7 +27,7 @@ export function ContasPage() {
   const totP = pagar.reduce((a, e) => a + e.valor, 0);
 
   return (
-    <div className="space-y-6">
+    <div className="min-w-0 max-w-full space-y-6">
       <div className="no-print flex flex-wrap items-end justify-between gap-3">
         <div>
           <h1 className="font-display text-3xl text-ink">Contas a receber e a pagar</h1>
@@ -50,7 +50,7 @@ export function ContasPage() {
           <p className="font-display text-3xl">{formatMoney(totP)}</p>
         </div>
       </div>
-      <article className="print-sheet space-y-6">
+      <article className="print-sheet min-w-0 max-w-full space-y-6">
         <div className="hidden text-center print:block">
           <h2 className="text-sm font-bold">CONTAS A RECEBER E A PAGAR</h2>
           <p className="mt-1 text-xs">
@@ -102,9 +102,10 @@ function Board({
 }) {
   const today = todayIso();
   return (
-    <section className="overflow-hidden rounded-2xl border border-line bg-paper">
+    <section className="max-w-full overflow-hidden rounded-2xl border border-line bg-paper">
       <div className="border-b border-line px-4 py-3 text-sm font-semibold">{title}</div>
-      <table className="w-full text-sm">
+      <div className="max-w-full overflow-x-auto overscroll-x-contain touch-pan-x [-webkit-overflow-scrolling:touch]">
+      <table className="w-full min-w-[44rem] text-sm">
         <thead className="text-left text-xs text-mute">
           <tr>
             <th className="px-4 py-2">Data da operação</th>
@@ -136,8 +137,8 @@ function Board({
                   <td>{e.contraparte}</td>
                   <td>{e.descricao}</td>
                   <td>{formatMoney(e.valor)}</td>
-                  <td className="no-print pr-4 text-right">
-                    <div className="flex flex-wrap justify-end gap-2">
+                  <td className="no-print sticky right-0 z-10 bg-paper pr-3 text-right shadow-[-10px_0_12px_-10px_rgba(0,0,0,.25)]">
+                    <div className="flex flex-nowrap justify-end gap-2 whitespace-nowrap py-1">
                       {onCharge ? (
                         <button className="btn-ghost" type="button" onClick={() => onCharge(e)}>
                           Cobrar
@@ -154,6 +155,7 @@ function Board({
           )}
         </tbody>
       </table>
+      </div>
     </section>
   );
 }
@@ -169,8 +171,10 @@ function ChargePanel({
   phone: string;
   onClose: () => void;
 }) {
+  const tipo = resolvePixTipo(company);
+  const chave = pixKeyForCompany(company);
   const pix = pixPayloadForEntry(company, entry);
-  const text = chargeMessage(company, entry, pix);
+  const text = chargeMessage(company, entry);
   const [copied, setCopied] = useState("");
 
   async function copy(label: string, value: string) {
@@ -192,18 +196,32 @@ function ChargePanel({
           Fechar
         </button>
       </div>
-      {!pix ? (
+      {!chave ? (
         <p className="mt-3 text-sm text-red">
-          Cadastre a chave Pix em Empresa para gerar o copia e cola.
+          Cadastre a chave Pix em Empresa para gerar a cobrança.
         </p>
       ) : (
-        <div className="mt-4 rounded-2xl bg-bg p-4">
-          <p className="text-xs font-semibold uppercase tracking-wide text-mute">Pix copia e cola</p>
-          <p className="mt-2 break-all text-xs">{pix}</p>
-          <button type="button" className="btn-ghost mt-3 gap-2" onClick={() => void copy("pix", pix)}>
-            <Copy className="size-4" />
-            {copied === "pix" ? "Copiado" : "Copiar Pix"}
-          </button>
+        <div className="mt-4 space-y-3">
+          <div className="rounded-2xl bg-bg p-4">
+            <p className="text-xs font-semibold uppercase tracking-wide text-mute">
+              {tipo === "copia_e_cola" ? "Pix copia e cola" : "Chave Pix enviada no WhatsApp"}
+            </p>
+            <p className="mt-2 break-all font-semibold">{chave}</p>
+            <button type="button" className="btn-ghost mt-3 gap-2" onClick={() => void copy("chave", chave)}>
+              <Copy className="size-4" />
+              {copied === "chave" ? "Copiado" : "Copiar chave"}
+            </button>
+          </div>
+          {tipo !== "copia_e_cola" && pix ? (
+            <div className="rounded-2xl bg-bg p-4">
+              <p className="text-xs font-semibold uppercase tracking-wide text-mute">Pix copia e cola</p>
+              <p className="mt-2 break-all text-xs">{pix}</p>
+              <button type="button" className="btn-ghost mt-3 gap-2" onClick={() => void copy("pix", pix)}>
+                <Copy className="size-4" />
+                {copied === "pix" ? "Copiado" : "Copiar Pix"}
+              </button>
+            </div>
+          ) : null}
         </div>
       )}
       <div className="mt-4 flex flex-wrap gap-2">

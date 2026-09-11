@@ -24,6 +24,8 @@ export type DiscountKind = "reais" | "percent";
 
 export type DasPerfil = "comercio" | "servicos" | "misto" | "caminhoneiro" | "caminhoneiro_servicos";
 
+export type PixTipo = "cnpj" | "cpf" | "telefone" | "email" | "copia_e_cola";
+
 export type PlanKey = "pro" | "contador";
 
 export type BillingCycle = "month" | "year";
@@ -42,6 +44,7 @@ export interface Company {
   capitalSocial: number;
   limiteFaturamento: number;
   dasPerfil?: DasPerfil;
+  pixTipo?: PixTipo;
   logoDataUrl?: string;
   /** Nome de quem assina o recibo. */
   responsavel?: string;

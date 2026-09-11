@@ -2,7 +2,7 @@ import { ExternalLink, Printer } from "lucide-react";
 import { useMemo, useState } from "react";
 import { BackToReports } from "@/components/layout/BackToReports";
 import { AlertBanners } from "@/components/alerts/AlertBanners";
-import { buildAlerts } from "@/lib/alerts";
+import { buildAlerts, visibleAlerts } from "@/lib/alerts";
 import {
   dasBreakdown,
   dasCompetenceKey,
@@ -26,11 +26,19 @@ type PayForm = {
   valorDas: number;
   juros: number;
   multa: number;
+  editingId?: string;
 };
 
+function labeledMoney(text: string, label: string) {
+  const match = text.match(new RegExp(`${label}\\s+R\\$\\s*([\\d.\\s\\u00a0]+,\\d{2})`, "i"));
+  if (!match) return 0;
+  return Number(match[1].replace(/\./g, "").replace(",", ".")) || 0;
+}
+
 export function DasPage() {
-  const { company, entries, addEntry, setCompany } = useStore();
-  const year = currentYear();
+  const { company, entries, addEntry, updateEntry, setCompany } = useStore();
+  const [year, setYear] = useState(currentYear());
+  const years = Array.from({ length: 8 }, (_, i) => currentYear() - i);
   const perfil = resolveDasPerfil(company);
   const calc = dasBreakdown(perfil);
   const paid = useMemo(() => dasPaidMap(entries), [entries]);
@@ -56,8 +64,20 @@ export function DasPage() {
 
   function openPay(month: number) {
     const existing = paid.get(dasCompetenceKey(year, month));
-    if (existing) return;
     setSaved("");
+    if (existing) {
+      const juros = labeledMoney(existing.descricao, "juros");
+      const multa = labeledMoney(existing.descricao, "multa");
+      setPayForm({
+        month,
+        paidAt: existing.data,
+        valorDas: Math.max(0, Math.round((existing.valor - juros - multa) * 100) / 100),
+        juros,
+        multa,
+        editingId: existing.id,
+      });
+      return;
+    }
     setPayForm({
       month,
       paidAt: todayIso(),
@@ -71,9 +91,6 @@ export function DasPage() {
     if (!payForm) return;
     const { month, paidAt, juros, multa } = payForm;
     if (!paidAt || totalPago <= 0) return;
-    const existing = paid.get(dasCompetenceKey(year, month));
-    if (existing) return;
-
     const extras: string[] = [];
     if (juros > 0) extras.push(`juros ${formatMoney(juros)}`);
     if (multa > 0) extras.push(`multa ${formatMoney(multa)}`);
@@ -82,7 +99,7 @@ export function DasPage() {
       extras.length > 0 ? `DAS MENSAL ${ref} (${extras.join(" + ")})` : `DAS MENSAL ${ref}`;
 
     const entry: Entry = {
-      id: uid("lan"),
+      id: payForm.editingId ?? uid("lan"),
       data: paidAt,
       contraparte: "RECEITA FEDERAL",
       documento: `DAS ${String(month + 1).padStart(2, "0")}/${year}`,
@@ -98,10 +115,11 @@ export function DasPage() {
       formaPagamento: "boleto",
       source: "manual",
     };
-    addEntry(entry);
+    if (payForm.editingId) updateEntry(payForm.editingId, entry);
+    else addEntry(entry);
     setPayForm(null);
     setSaved(
-      `DAS de ${MONTHS[month]} lançado: ${formatMoney(totalPago)} em ${formatDate(paidAt)}${
+      `DAS de ${MONTHS[month]} ${payForm.editingId ? "alterado" : "lançado"}: ${formatMoney(totalPago)} em ${formatDate(paidAt)}${
         extras.length ? ` (${extras.join(", ")})` : ""
       }.`,
     );
@@ -110,7 +128,7 @@ export function DasPage() {
   return (
     <div className="space-y-6">
       <BackToReports />
-      <AlertBanners alerts={buildAlerts(company, entries).filter((a) => a.kind === "das")} />
+      <AlertBanners alerts={visibleAlerts(buildAlerts(company, entries)).filter((a) => a.kind === "das")} />
       <div className="no-print flex flex-wrap items-end justify-between gap-3">
         <div>
           <h1 className="font-display text-3xl text-ink">Emissão do DAS</h1>
@@ -119,7 +137,24 @@ export function DasPage() {
             lança o pagamento no livro-caixa — inclusive com juros e multa de atraso.
           </p>
         </div>
-        <div className="flex flex-wrap gap-2">
+        <div className="flex flex-wrap items-end gap-2">
+          <label className="block text-xs font-medium text-mute">
+            Ano de competência
+            <select
+              className="input mt-1.5 w-28"
+              value={year}
+              onChange={(e) => {
+                setYear(Number(e.target.value));
+                setPayForm(null);
+              }}
+            >
+              {years.map((item) => (
+                <option key={item} value={item}>
+                  {item}
+                </option>
+              ))}
+            </select>
+          </label>
           <button className="btn-ghost gap-2" onClick={() => void printOrSharePdf("das-conferencia.pdf")}>
             <Printer className="size-4" />
             PDF A4 conferência
@@ -149,6 +184,11 @@ export function DasPage() {
             {atrasados ? `${atrasados} em atraso` : "Nenhuma competência atrasada"}
           </p>
           <p className="mt-3 text-xs text-mute">CNPJ {company.cnpj}. Vencimento todo dia 20 do mês seguinte.</p>
+          {year < currentYear() ? (
+            <p className="mt-2 text-xs text-mute">
+              Exercício anterior não gera aviso de atraso. Você pode lançar ou alterar o pagamento se quiser o histórico.
+            </p>
+          ) : null}
         </section>
       </div>
 
@@ -174,7 +214,7 @@ export function DasPage() {
       {payForm ? (
         <section className="no-print rounded-2xl border border-orange bg-paper p-5">
           <h2 className="text-sm font-semibold">
-            Lançar pagamento — {MONTHS[payForm.month]}/{year}
+            {payForm.editingId ? "Alterar pagamento" : "Lançar pagamento"} — {MONTHS[payForm.month]}/{year}
           </h2>
           <p className="mt-1 text-xs text-mute">
             Informe a data em que pagou e o valor da guia. Em atraso, some juros e multa conforme o PGMEI.
@@ -246,7 +286,7 @@ export function DasPage() {
                 disabled={!payForm.paidAt || totalPago <= 0}
                 onClick={confirmPay}
               >
-                Confirmar lançamento
+                {payForm.editingId ? "Salvar alteração" : "Confirmar lançamento"}
               </button>
             </div>
           </div>
@@ -288,18 +328,13 @@ export function DasPage() {
                     )}
                   </td>
                   <td className="no-print pr-4 text-right">
-                    {row.entry ? null : (
-                      <button
-                        type="button"
-                        className={cn(
-                          "btn-ghost",
-                          payForm?.month === row.month && "border-navy text-navy",
-                        )}
-                        onClick={() => openPay(row.month)}
-                      >
-                        Lançar pagamento
-                      </button>
-                    )}
+                    <button
+                      type="button"
+                      className={cn("btn-ghost", payForm?.month === row.month && "border-navy text-navy")}
+                      onClick={() => openPay(row.month)}
+                    >
+                      {row.entry ? "Alterar" : "Lançar pagamento"}
+                    </button>
                   </td>
                 </tr>
               ))}

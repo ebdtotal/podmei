@@ -42,6 +42,8 @@ export function buildAlerts(company: Company, entries: Entry[], today = todayIso
       const key = dasCompetenceKey(y, month);
       if (paid.has(key)) continue;
       const late = due < today;
+      // Exercício anterior pode ser lançado, mas não vira aviso de atraso no cadastro.
+      if (late && y < year) continue;
       const days = daysBetween(today, due);
       const ref = `${MONTHS[month]}/${y}`;
       alerts.push({
@@ -84,4 +86,27 @@ export function buildAlerts(company: Company, entries: Entry[], today = todayIso
   }
 
   return alerts;
+}
+
+const DISMISS_KEY = "podmei-alert-dismissed";
+
+export function dismissedAlertIds(): Set<string> {
+  try {
+    const raw = localStorage.getItem(DISMISS_KEY);
+    const list = raw ? (JSON.parse(raw) as unknown) : [];
+    return new Set(Array.isArray(list) ? list.filter((item): item is string => typeof item === "string") : []);
+  } catch {
+    return new Set();
+  }
+}
+
+export function dismissAlert(id: string) {
+  const gone = dismissedAlertIds();
+  gone.add(id);
+  localStorage.setItem(DISMISS_KEY, JSON.stringify([...gone]));
+}
+
+export function visibleAlerts(alerts: AppAlert[]) {
+  const gone = dismissedAlertIds();
+  return alerts.filter((alert) => !gone.has(alert.id));
 }
