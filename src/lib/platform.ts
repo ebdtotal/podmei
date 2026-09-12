@@ -11,7 +11,7 @@ import type {
   Subscription,
   WorkspaceSnapshot,
 } from "./platform-types";
-import { allowsExternalPurchaseUi } from "./native";
+import { allowsExternalPurchaseUi, isIosApp } from "./native";
 import { clearLocalSession, localPlatform, readLocalSession, SESSION_KEY } from "./platform-local";
 
 const API = "/api/index.php";
@@ -240,7 +240,7 @@ export const platform = {
 
   async checkout(input: CheckoutInput) {
     if (!allowsExternalPurchaseUi()) {
-      throw new Error("Compra de plano não está disponível neste app iOS. Use podmei.com no navegador.");
+      throw new Error("Neste iPhone/iPad use a compra pela App Store (In-App Purchase).");
     }
     if (await backend()) {
       const data = await requestCheckout<{
@@ -272,6 +272,38 @@ export const platform = {
       throw new Error("Não foi possível falar com o servidor de pagamento. Atualize a página e tente de novo.");
     }
     return localPlatform.checkout(input);
+  },
+
+  async checkoutApple(input: CheckoutInput & { productId: string; transactionId: string; receipt?: string }) {
+    if (!isIosApp()) {
+      throw new Error("Compra Apple só está disponível no app iOS.");
+    }
+    const url = apiBase("/api/checkout-apple.php");
+    let res: Response;
+    try {
+      res = await fetch(url, {
+        method: "POST",
+        cache: "no-store",
+        signal: timeoutSignal(45_000),
+        headers: { Accept: "application/json", "Content-Type": "application/json" },
+        body: JSON.stringify(input),
+      });
+    } catch {
+      throw new Error("Falha ao confirmar a compra com o servidor. Verifique a internet.");
+    }
+    const data = (await res.json().catch(() => ({}))) as {
+      ok?: boolean;
+      error?: string;
+      username?: string;
+      email?: string;
+      nome?: string;
+      tempPassword?: string | null;
+      status?: string;
+    };
+    if (!res.ok || data.error) {
+      throw new Error(data.error || "Não foi possível ativar a assinatura Apple.");
+    }
+    return data;
   },
 
   async paymentStatus(id: string, paymentId?: string, preapprovalId?: string) {

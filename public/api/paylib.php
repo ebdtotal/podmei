@@ -878,3 +878,61 @@ function pay_signup_to_lead(array $row): array {
   ];
 }
 
+/** Ativa assinatura após compra StoreKit (IAP) no app iOS. */
+function pay_product_to_plan(string $productId): array {
+  $map = [
+    "br.com.podmei.app.pro.month" => ["plan" => "pro", "cycle" => "month"],
+    "br.com.podmei.app.pro.year" => ["plan" => "pro", "cycle" => "year"],
+    "br.com.podmei.app.premium.month" => ["plan" => "premium", "cycle" => "month"],
+    "br.com.podmei.app.premium.year" => ["plan" => "premium", "cycle" => "year"],
+    "br.com.podmei.app.contador.month" => ["plan" => "contador", "cycle" => "month"],
+    "br.com.podmei.app.contador.year" => ["plan" => "contador", "cycle" => "year"],
+  ];
+  if (!isset($map[$productId])) {
+    pay_json_err("Produto Apple inválido: " . $productId);
+  }
+  return $map[$productId];
+}
+
+function pay_checkout_apple(array $in): array {
+  $nome = trim((string) ($in["nome"] ?? ""));
+  $email = strtolower(trim((string) ($in["email"] ?? "")));
+  $telefone = trim((string) ($in["telefone"] ?? ""));
+  $cnpj = trim((string) ($in["cnpj"] ?? ""));
+  $empresa = trim((string) ($in["empresa"] ?? ""));
+  $productId = trim((string) ($in["productId"] ?? ""));
+  $transactionId = trim((string) ($in["transactionId"] ?? ""));
+  if ($nome === "") pay_json_err("Informe o nome completo.");
+  if (!pay_email_ok($email)) pay_json_err("Informe um e-mail válido.");
+  if ($productId === "" || $transactionId === "") pay_json_err("Compra Apple incompleta.");
+
+  $mapped = pay_product_to_plan($productId);
+  $plan = $mapped["plan"];
+  $cycle = $mapped["cycle"];
+  $amount = pay_plan_price($plan, $cycle, false);
+  $paymentId = "apple_" . preg_replace("/[^a-zA-Z0-9_-]/", "", $transactionId);
+
+  $pdo = pay_db();
+  $dup = $pdo->prepare("SELECT id, status, user_id, username, email, nome FROM signups WHERE mp_payment_id = ? LIMIT 1");
+  $dup->execute([$paymentId]);
+  $already = $dup->fetch();
+  if ($already && (string) ($already["status"] ?? "") === "pago" && (string) ($already["user_id"] ?? "") !== "") {
+    return pay_ativar_signup((string) $already["id"], $paymentId);
+  }
+
+  $st = $pdo->prepare("SELECT * FROM signups WHERE email = ? AND status = 'pendente' ORDER BY created_at DESC LIMIT 1");
+  $st->execute([$email]);
+  $exist = $st->fetch();
+  $sid = $exist ? (string) $exist["id"] : pay_uid("ass");
+  $now = pay_now();
+  if ($exist) {
+    $pdo->prepare("UPDATE signups SET nome=?, telefone=?, cnpj=?, empresa=?, plan=?, cycle=?, amount=? WHERE id=?")
+      ->execute([$nome, $telefone, $cnpj, $empresa, $plan, $cycle, $amount, $sid]);
+  } else {
+    $pdo->prepare("INSERT INTO signups (id,nome,email,telefone,cnpj,empresa,plan,cycle,amount,status,created_at) VALUES (?,?,?,?,?,?,?,?,?,?,?)")
+      ->execute([$sid, $nome, $email, $telefone, $cnpj, $empresa, $plan, $cycle, $amount, "pendente", $now]);
+  }
+
+  return pay_ativar_signup($sid, $paymentId);
+}
+

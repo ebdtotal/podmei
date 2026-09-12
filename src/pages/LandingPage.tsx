@@ -15,7 +15,7 @@ import {
 } from "lucide-react";
 import { Logo } from "@/components/brand/Logo";
 import { ThemeToggle } from "@/components/brand/ThemeToggle";
-import { allowsExternalPurchaseUi } from "@/lib/native";
+import { allowsExternalPurchaseUi, isIosApp } from "@/lib/native";
 import { PLAN_KEYS, plans } from "@/lib/plans";
 import { cn, formatMoney } from "@/lib/utils";
 
@@ -27,8 +27,8 @@ const features = [
   },
   {
     icon: Camera,
-    title: "Foto, áudio, texto e extrato",
-    text: "Lance compra e venda do jeito que o dia permitir, ou importe o PDF/Excel do banco.",
+    title: "Áudio, texto e extrato",
+    text: "Lance compra e venda por texto ou áudio, ou importe o PDF/Excel do banco.",
   },
   {
     icon: Users,
@@ -108,7 +108,7 @@ function ShieldLock({ className, strokeWidth = 1.6 }: { className?: string; stro
 }
 
 export function LandingPage() {
-  const canPurchase = allowsExternalPurchaseUi();
+  const canPurchase = allowsExternalPurchaseUi() || isIosApp();
 
   return (
     <div className="bg-bg text-ink">
@@ -172,11 +172,6 @@ export function LandingPage() {
               {!canPurchase ? <ArrowRight className="size-4" /> : null}
             </Link>
           </div>
-          {!canPurchase ? (
-            <p className="mt-4 max-w-xl text-sm text-mute">
-              Neste app iOS não há compra de plano. Novas assinaturas são feitas em podmei.com pelo navegador.
-            </p>
-          ) : null}
         </div>
         <HeroCard />
       </section>
@@ -222,9 +217,11 @@ export function LandingPage() {
         <div>
           <h2 className="font-display text-4xl text-ink">Pacotes de acesso</h2>
           <p className="mt-2 text-mute">
-            {canPurchase
-              ? "Pro para o essencial. Premium para caixa e visão completa. Contador para o escritório."
-              : "Pro, Premium e Contador. Assinatura apenas em podmei.com."}
+            {isIosApp()
+              ? "Pro, Premium e Contador. Assinatura pela App Store neste app."
+              : canPurchase
+                ? "Pro para o essencial. Premium para caixa e visão completa. Contador para o escritório."
+                : "Pro, Premium e Contador."}
           </p>
         </div>
         <div className="mt-8 grid gap-4 lg:grid-cols-3">
@@ -254,7 +251,7 @@ export function LandingPage() {
                     Assinar {p.name}
                   </Link>
                 ) : (
-                  <p className="mt-6 text-sm text-mute">Disponível para assinantes. Entre com sua conta ou assine em podmei.com.</p>
+                  <p className="mt-6 text-sm text-mute">Disponível para assinantes. Entre com sua conta.</p>
                 )}
               </article>
             );

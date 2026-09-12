@@ -66,5 +66,13 @@
 	</array>
 	<key>UIViewControllerBasedStatusBarAppearance</key>
 	<true/>
+	<key>NSCameraUsageDescription</key>
+	<string>O PODMEI usa a câmera para você fotografar a logo da empresa nos relatórios e recibos.</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>O PODMEI acessa suas fotos para escolher a logo da empresa nos relatórios e recibos.</string>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>O PODMEI usa o microfone para lançamentos por áudio.</string>
+	<key>NSSpeechRecognitionUsageDescription</key>
+	<string>O PODMEI usa reconhecimento de fala para converter áudio em lançamentos.</string>
 </dict>
 </plist>

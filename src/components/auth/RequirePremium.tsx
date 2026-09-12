@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 import { Link, Navigate, useLocation } from "react-router-dom";
 import { useAuth } from "@/lib/auth";
+import { isIosApp } from "@/lib/native";
 import { hasPremiumAccess, isPremiumPath } from "@/lib/plans";
 
 /** Bloqueia rotas Premium para assinantes Pro. Contador/Master passam. */
@@ -32,7 +33,7 @@ export function RequirePremium({ children }: { children: ReactNode }) {
       </p>
       <div className="flex flex-wrap justify-center gap-2 pt-2">
         <Link to="/assinar/premium" className="btn-primary">
-          Assinar Premium
+          {isIosApp() ? "Assinar na App Store" : "Assinar Premium"}
         </Link>
         <Link to="/app" className="btn-ghost">
           Voltar ao painel

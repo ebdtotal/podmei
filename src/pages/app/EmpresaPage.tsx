@@ -3,7 +3,7 @@ import { Link } from "react-router-dom";
 import { companyTypeLabel, MEI_FATURAMENTO } from "@/lib/mei";
 import { dasPerfilFromTipo, dasPerfilLabel } from "@/lib/das";
 import { useAuth } from "@/lib/auth";
-import { allowsExternalPurchaseUi } from "@/lib/native";
+import { allowsExternalPurchaseUi, isIosApp } from "@/lib/native";
 import { plans } from "@/lib/plans";
 import { platform, type AccountantInvite } from "@/lib/platform";
 import type { Subscription } from "@/lib/platform-types";
@@ -552,27 +552,21 @@ export function EmpresaPage() {
                     {subBusy ? "Cancelando…" : "Cancelar assinatura"}
                   </button>
                 ) : null}
-                {allowsExternalPurchaseUi() ? (
-                  <Link to={`/assinar/${sub.plan === "contador" ? "contador" : "pro"}`} className="btn-ghost">
+                {allowsExternalPurchaseUi() || isIosApp() ? (
+                  <Link to={`/assinar/${sub.plan === "contador" ? "contador" : sub.plan === "premium" ? "premium" : "pro"}`} className="btn-ghost">
                     Trocar / renovar plano
                   </Link>
-                ) : (
-                  <p className="w-full text-sm text-mute">
-                    Para trocar ou renovar o plano, use podmei.com no navegador. Neste app iOS não há compra.
-                  </p>
-                )}
+                ) : null}
               </div>
             </div>
           ) : (
             <div className="mt-3 space-y-2 text-sm">
               <p className="text-mute">Nenhuma assinatura ativa encontrada nesta conta.</p>
-              {allowsExternalPurchaseUi() ? (
+              {allowsExternalPurchaseUi() || isIosApp() ? (
                 <Link to="/assinar/pro" className="btn-ghost inline-flex">
-                  Ver planos no site
+                  Ver planos
                 </Link>
-              ) : (
-                <p className="text-mute">Assinaturas novas são feitas em podmei.com pelo navegador.</p>
-              )}
+              ) : null}
             </div>
           )}
           {subMsg ? <p className="mt-2 text-sm text-green-700">{subMsg}</p> : null}

@@ -33,8 +33,8 @@ export function isIosApp() {
 }
 
 /**
- * Guideline 3.1.1: no paid digital content / Pro upgrade via external payment inside the iOS app.
- * Web and Android keep Mercado Pago checkout.
+ * Guideline 3.1.1: no Mercado Pago / external web checkout inside the iOS app.
+ * iOS uses App Store In-App Purchase instead (see CheckoutPage + src/lib/iap.ts).
  */
 export function allowsExternalPurchaseUi() {
   return !isIosApp();
