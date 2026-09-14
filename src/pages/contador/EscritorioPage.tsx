@@ -10,6 +10,7 @@ import type { Accountant, Company, PixTipo } from "@/lib/types";
 import { inferPixTipo, normalizePixKey, pixTipoLabel } from "@/lib/charge";
 import { stripLogoBackground } from "@/lib/logo";
 import { formatMoney } from "@/lib/utils";
+import { BiometricSettings } from "@/components/auth/BiometricSettings";
 import { DateBrInput } from "@/components/ui/DateBrInput";
 import { MoneyBrInput } from "@/components/ui/MoneyBrInput";
 
@@ -141,20 +142,25 @@ export function EscritorioPage() {
   }
 
   function saveAll() {
-    setAccountant(accForm);
     if (isPremium) {
       const pixTipo = form.pixTipo || inferPixTipo(form.pixChave || "");
+      const nomeEscritorio = form.nome || accForm.escritorio || "Escritório Contábil";
       setCompany({
         ...form,
         regimeTributario: "simples_nacional",
         limiteFaturamento: 0,
         pixTipo,
         pixChave: normalizePixKey(pixTipo, form.pixChave || ""),
-        nome: form.nome || accForm.escritorio || "Escritório Contábil",
+        nome: nomeEscritorio,
       });
-      if (accForm.escritorio !== form.nome && form.nome) {
-        setAccountant({ ...accForm, escritorio: form.nome });
-      }
+      setAccountant({
+        ...accForm,
+        escritorio: nomeEscritorio,
+        email: form.email || accForm.email,
+        assinaturaEmail: accForm.assinaturaEmail ?? "",
+      });
+    } else {
+      setAccountant(accForm);
     }
     setSaved(true);
   }
@@ -345,6 +351,20 @@ export function EscritorioPage() {
                 />
               </Field>
               <div className="md:col-span-2">
+                <Field label="Assinatura dos e-mails de cobrança">
+                  <textarea
+                    className="input min-h-28"
+                    placeholder={"Ex.:\nAtenciosamente,\nFulano — CRC …\nEscritório XYZ\n(11) 99999-0000"}
+                    value={accForm.assinaturaEmail ?? ""}
+                    onChange={(e) => patchAcc("assinaturaEmail", e.target.value)}
+                  />
+                </Field>
+                <p className="mt-1.5 text-xs text-mute">
+                  Aparece no final dos avisos automáticos (3 dias antes, no dia e 3 dias após o vencimento). Só no Contador
+                  Premium.
+                </p>
+              </div>
+              <div className="md:col-span-2">
                 <p className="text-xs font-medium text-mute">Chave Pix (cobrança)</p>
                 <div className="mt-1.5 flex flex-wrap gap-2">
                   {(Object.keys(pixTipoLabel) as PixTipo[]).map((tipo) => {
@@ -446,6 +466,8 @@ export function EscritorioPage() {
             </div>
             {backupMsg ? <p className="mt-2 text-sm text-mute">{backupMsg}</p> : null}
           </section>
+
+          <BiometricSettings />
 
           {user && user.role !== "master" ? (
             <section className="rounded-2xl border border-line bg-paper p-5">

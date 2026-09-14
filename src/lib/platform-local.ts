@@ -188,7 +188,7 @@ export const localPlatform = {
     if (!user) throw new Error("Usuário ou senha inválidos.");
     if (user.status !== "ativo") throw new Error("Conta bloqueada.");
     const token = `local.${user.id}`;
-    localStorage.setItem(SESSION_KEY, JSON.stringify({ token, user: publicUser(user) }));
+    writeLocalSession({ token, user: publicUser(user) });
     return { token, user: publicUser(user) };
   },
 
@@ -395,8 +395,15 @@ export function readLocalSession(): { token: string; user: SessionUser } | null 
   }
 }
 
+export function writeLocalSession(session: { token: string; user: SessionUser }) {
+  const raw = JSON.stringify(session);
+  localStorage.setItem(SESSION_KEY, raw);
+  void import("./session-persist").then((m) => m.persistSessionToNative(raw));
+}
+
 export function clearLocalSession() {
   localStorage.removeItem(SESSION_KEY);
+  void import("./session-persist").then((m) => m.persistSessionToNative(null));
 }
 
 export { SESSION_KEY };

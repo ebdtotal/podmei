@@ -531,14 +531,26 @@ function podmei_uid(string $prefix): string {
   return $prefix . "_" . bin2hex(random_bytes(6));
 }
 
-function podmei_mail(string $para, string $assunto, string $texto): bool {
+/**
+ * Envio pelo SMTP/caixa PODMEI (From fixo).
+ * $opts: from_name (exibição), reply_to (Resposta → e-mail do escritório).
+ */
+function podmei_mail(string $para, string $assunto, string $texto, array $opts = []): bool {
   if (!filter_var($para, FILTER_VALIDATE_EMAIL)) return false;
   $cfg = podmei_cfg();
   $from = trim((string) ($cfg["from_email"] ?? "naoresponda@podmei.com"));
   if ($from === "") $from = "naoresponda@podmei.com";
-  $fromName = trim((string) ($cfg["from_name"] ?? "PODMEI"));
+  $fromName = trim((string) ($opts["from_name"] ?? $cfg["from_name"] ?? "PODMEI"));
+  if ($fromName === "") $fromName = "PODMEI";
+  $replyTo = trim((string) ($opts["reply_to"] ?? ""));
+  if (!filter_var($replyTo, FILTER_VALIDATE_EMAIL)) $replyTo = $from;
+  $safeName = str_replace(["\r", "\n", "<", ">"], "", $fromName);
+  $encodedName = "=?UTF-8?B?" . base64_encode($safeName) . "?=";
   $encoded = "=?UTF-8?B?" . base64_encode($assunto) . "?=";
-  $headers = "MIME-Version: 1.0\r\nContent-Type: text/plain; charset=UTF-8\r\nFrom: {$fromName} <{$from}>\r\nReply-To: {$from}\r\nX-Mailer: PODMEI\r\n";
+  $headers = "MIME-Version: 1.0\r\nContent-Type: text/plain; charset=UTF-8\r\n"
+    . "From: {$encodedName} <{$from}>\r\n"
+    . "Reply-To: {$replyTo}\r\n"
+    . "X-Mailer: PODMEI\r\n";
   return @mail($para, $encoded, $texto, $headers, "-f" . $from);
 }
 

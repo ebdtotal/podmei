@@ -176,6 +176,8 @@ export interface Accountant {
   email: string;
   telefone: string;
   escritorio: string;
+  /** Assinatura no fim dos e-mails de cobrança (Contador Premium). */
+  assinaturaEmail?: string;
 }
 
 export type EmployeeStatus = "ativo" | "desligado";

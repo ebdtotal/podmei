@@ -12,6 +12,7 @@ import type { Company, CompanyType, DasPerfil, PixTipo, RegimeTributario } from 
 import { inferPixTipo, normalizePixKey, pixTipoLabel } from "@/lib/charge";
 import { stripLogoBackground } from "@/lib/logo";
 import { formatMoney } from "@/lib/utils";
+import { BiometricSettings } from "@/components/auth/BiometricSettings";
 import { DateBrInput } from "@/components/ui/DateBrInput";
 import { MoneyBrInput } from "@/components/ui/MoneyBrInput";
 
@@ -600,6 +601,8 @@ export function EmpresaPage() {
           {subErr ? <p className="mt-2 text-sm text-red">{subErr}</p> : null}
         </section>
       ) : null}
+
+      <BiometricSettings />
 
       {user && user.role !== "master" ? (
         <section className="rounded-2xl border border-line bg-paper p-5">

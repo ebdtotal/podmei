@@ -10,25 +10,30 @@ import { ThemeProvider } from "./lib/theme";
 import { AlertBridge } from "./lib/AlertBridge";
 import { WorkspaceCloudBridge } from "./lib/WorkspaceCloudBridge";
 import { iniciarAppNativo } from "./lib/native";
+import { hydrateNativeSession } from "./lib/session-persist";
 import "./index.css";
 
-void iniciarAppNativo();
+async function boot() {
+  await hydrateNativeSession();
+  void iniciarAppNativo();
+  createRoot(document.getElementById("root")!).render(
+    <StrictMode>
+      <ErrorBoundary>
+        <ThemeProvider>
+          <BrowserRouter>
+            <ScrollToTop />
+            <AuthProvider>
+              <StoreProvider>
+                <WorkspaceCloudBridge />
+                <AlertBridge />
+                <App />
+              </StoreProvider>
+            </AuthProvider>
+          </BrowserRouter>
+        </ThemeProvider>
+      </ErrorBoundary>
+    </StrictMode>,
+  );
+}
 
-createRoot(document.getElementById("root")!).render(
-  <StrictMode>
-    <ErrorBoundary>
-      <ThemeProvider>
-        <BrowserRouter>
-          <ScrollToTop />
-          <AuthProvider>
-            <StoreProvider>
-              <WorkspaceCloudBridge />
-              <AlertBridge />
-              <App />
-            </StoreProvider>
-          </AuthProvider>
-        </BrowserRouter>
-      </ThemeProvider>
-    </ErrorBoundary>
-  </StrictMode>,
-);
+void boot();

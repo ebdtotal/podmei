@@ -66,6 +66,8 @@
 	</array>
 	<key>UIViewControllerBasedStatusBarAppearance</key>
 	<true/>
+	<key>NSFaceIDUsageDescription</key>
+	<string>O PODMEI usa Face ID para desbloquear o app com a conta já logada.</string>
 	<key>NSCameraUsageDescription</key>
 	<string>O PODMEI usa a câmera para você fotografar a logo da empresa nos relatórios e recibos.</string>
 	<key>NSPhotoLibraryUsageDescription</key>

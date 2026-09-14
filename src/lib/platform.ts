@@ -12,7 +12,7 @@ import type {
   WorkspaceSnapshot,
 } from "./platform-types";
 import { allowsExternalPurchaseUi, isIosApp } from "./native";
-import { clearLocalSession, localPlatform, readLocalSession, SESSION_KEY } from "./platform-local";
+import { clearLocalSession, localPlatform, readLocalSession, writeLocalSession } from "./platform-local";
 
 const API = "/api/index.php";
 const CHECKOUT_API = "/api/checkout.php";
@@ -207,7 +207,7 @@ function token() {
 }
 
 function saveSession(session: { token: string; user: SessionUser }) {
-  localStorage.setItem(SESSION_KEY, JSON.stringify(session));
+  writeLocalSession(session);
 }
 
 export const platform = {

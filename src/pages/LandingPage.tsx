@@ -89,7 +89,7 @@ const values = [
 const faqs = [
   {
     q: "Substitui o contador?",
-    a: "Não. O MEI usa o PODMEI Pro ou Premium no dia a dia. O escritório entra no Contador ou Contador Premium, troca de CNPJ e acompanha os clientes. Contador Premium trata o próprio escritório como Simples Nacional, sem o teto de R$ 81 mil do MEI.",
+    a: "Não. O MEI usa o PODMEI Pro ou Premium no dia a dia. O escritório entra no Contador ou Contador Premium, troca de CNPJ e acompanha os clientes. Contador Premium trata o próprio escritório como Simples Nacional, sem o teto de R$ 81 mil do MEI, e envia cobranças automáticas por e-mail nas contas a receber.",
   },
   {
     q: "Os dados ficam onde?",
@@ -97,11 +97,11 @@ const faqs = [
   },
   {
     q: "Como funciona a cobrança?",
-    a: "A assinatura é recorrente no Mercado Pago (mensal ou anual) até você cancelar em Empresa. O acesso é liberado após a confirmação do pagamento.",
+    a: "A assinatura é recorrente no Mercado Pago (mensal ou anual) até você cancelar em Empresa. O acesso é liberado após a confirmação do pagamento. No Contador Premium, o escritório ainda dispara e-mails automáticos de cobrança aos clientes (3 dias antes, no dia e 3 dias depois se não houver baixa), com assinatura configurável.",
   },
   {
     q: "Qual plano escolher?",
-    a: "PODMEI Pro é para o MEI cuidar da própria empresa. PODMEI Contador é para o escritório administrar a carteira de CNPJs.",
+    a: "PODMEI Pro ou Premium para o MEI cuidar da própria empresa. Contador para a carteira de CNPJs. Contador Premium para o escritório no Simples Nacional, com ferramentas Premium e cobrança automática por e-mail.",
   },
 ];
 
@@ -227,10 +227,10 @@ export function LandingPage() {
           <h2 className="font-display text-4xl text-ink">Pacotes de acesso</h2>
           <p className="mt-2 text-mute">
             {isIosApp()
-              ? "Pro, Premium, Contador e Contador Premium. Assinatura pela App Store neste app."
+              ? "Pro, Premium, Contador e Contador Premium (com cobrança automática por e-mail). Assinatura pela App Store neste app."
               : canPurchase
-                ? "Pro para o essencial. Premium para o MEI. Contador e Contador Premium para o escritório."
-                : "Pro, Premium, Contador e Contador Premium."}
+                ? "Pro para o essencial. Premium para o MEI. Contador para a carteira. Contador Premium com Simples Nacional e cobranças automáticas por e-mail."
+                : "Pro, Premium, Contador e Contador Premium (cobranças automáticas por e-mail)."}
           </p>
         </div>
         <div className="mt-8 grid gap-4 md:grid-cols-2 xl:grid-cols-4">

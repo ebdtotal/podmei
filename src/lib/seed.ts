@@ -144,6 +144,7 @@ export const demoAccountant = {
   email: "carla@contador.mei",
   telefone: "(11) 98888-0101",
   escritorio: "Mendes Contabilidade",
+  assinaturaEmail: "",
 };
 
 export function welcomeWhatsapp() {
