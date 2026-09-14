@@ -82,7 +82,15 @@ export function WorkspaceCloudBridge() {
 
       let local = loadWorkspaceFor(userId);
       if (isDemoWorkspace(local)) {
-        local = emptyWorkspace(user.plan === "contador" || user.role === "master" ? "contador" : "pro");
+        local = emptyWorkspace(
+          user.plan === "contador_premium"
+            ? "contador_premium"
+            : user.plan === "contador" || user.role === "master"
+              ? "contador"
+              : user.plan === "premium"
+                ? "premium"
+                : "pro",
+        );
       }
 
       try {

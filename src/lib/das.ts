@@ -106,6 +106,20 @@ export function nextBusinessDay(date: Date) {
   return cur;
 }
 
+/** Dia útil no próprio dia ou, se fim de semana/feriado, o dia útil anterior (antecipa). */
+export function previousBusinessDay(date: Date) {
+  const cur = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+  while (isWeekend(cur) || isNationalHoliday(cur)) {
+    cur.setDate(cur.getDate() - 1);
+  }
+  return cur;
+}
+
+/** Último dia útil do mês (0–11). */
+export function lastBusinessDayOfMonth(year: number, month: number) {
+  return previousBusinessDay(new Date(year, month + 1, 0));
+}
+
 /**
  * Vencimento do DAS da competência `month` (0–11): dia 20 do mês seguinte.
  * Se cair em sábado, domingo ou feriado nacional, vai para o próximo dia útil.

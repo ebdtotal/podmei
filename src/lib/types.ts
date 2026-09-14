@@ -26,9 +26,12 @@ export type DasPerfil = "comercio" | "servicos" | "misto" | "caminhoneiro" | "ca
 
 export type PixTipo = "cnpj" | "cpf" | "telefone" | "email" | "copia_e_cola";
 
-export type PlanKey = "pro" | "premium" | "contador";
+export type PlanKey = "pro" | "premium" | "contador" | "contador_premium";
 
 export type BillingCycle = "month" | "year";
+
+/** MEI (teto R$ 81 mil) ou empresa do Simples Nacional (sem esse teto). */
+export type RegimeTributario = "mei" | "simples_nacional";
 
 export interface Company {
   cnpj: string;
@@ -43,6 +46,8 @@ export interface Company {
   dataAbertura: string;
   capitalSocial: number;
   limiteFaturamento: number;
+  /** Padrão: MEI. Contador Premium usa Simples Nacional no escritório. */
+  regimeTributario?: RegimeTributario;
   dasPerfil?: DasPerfil;
   pixTipo?: PixTipo;
   logoDataUrl?: string;
@@ -58,6 +63,11 @@ export interface Company {
   metaFaturamentoAno?: number;
   /** Dias de antecedência para lembrete de a receber/pagar. */
   lembreteContasDias?: number;
+  /**
+   * Faturamento histórico mensal (YYYY-MM → R$) para RBT12 do Simples Nacional
+   * quando o mês ainda não tem receita lançada no sistema.
+   */
+  simplesReceitaHistorico?: Record<string, number>;
 }
 
 export interface Contact {
@@ -86,6 +96,36 @@ export interface Product {
   unidade: string;
   observacao: string;
   createdAt: string;
+  /** Saldo atual (só produtos físicos). Atualizado por venda/compra. */
+  estoqueAtual?: number;
+  /** Alerta quando estoqueAtual <= este valor (opcional). */
+  estoqueMinimo?: number;
+  /** Custo médio ponderado (atualizado nas compras / entradas). */
+  custoMedio?: number;
+}
+
+/** Movimento de estoque: compra = entrada, venda = saída, edição manual = ajuste. */
+export type StockMoveKind = "entrada" | "saida" | "ajuste";
+
+export interface StockMovement {
+  id: string;
+  productId: string;
+  kind: StockMoveKind;
+  data: string;
+  /** Sempre positivo; o sinal vem de `kind` (ajuste: positivo = entrada, negativo = saída via qty + note). */
+  qty: number;
+  /** Em ajuste, +1 entrada / −1 saída no saldo. */
+  sign?: 1 | -1;
+  unitCost?: number;
+  unitPrice?: number;
+  /** Margem unitária na saída (preço − custo médio no momento). */
+  marginUnit?: number;
+  /** Margem total da saída. */
+  marginTotal?: number;
+  saldoApos?: number;
+  entryId?: string;
+  observacao?: string;
+  createdAt: string;
 }
 
 export interface Entry {
@@ -107,6 +147,11 @@ export interface Entry {
   contactId?: string;
   productId?: string;
   quantidade?: number;
+  /**
+   * Qtd. para estoque em séries (parcelado/recorrente).
+   * Só o 1º lançamento da série deve ter; os demais não movem estoque.
+   */
+  stockQty?: number;
   precoUnitario?: number;
   descontoTipo?: DiscountKind;
   descontoValor?: number;
@@ -228,6 +273,8 @@ export interface MeiClient {
   whatsapp: WhatsAppMessage[];
   whatsappPhone: string;
   employee?: Employee | null;
+  /** Contador Premium / Simples: vários colaboradores. MEI usa só `employee`. */
+  employees?: Employee[];
   payrolls?: PayrollRun[];
   contacts?: Contact[];
   products?: Product[];
@@ -235,6 +282,7 @@ export interface MeiClient {
   events?: CalendarEvent[];
   investments?: Investment[];
   investmentMovements?: InvestmentMovement[];
+  stockMovements?: StockMovement[];
   /** Convite aceito: cópia do MEI na carteira do contador. */
   sharedInviteId?: string;
 }

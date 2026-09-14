@@ -1,5 +1,6 @@
-import { dasBreakdown, dasCompetenceKey, dasDueDate, dasPaidMap, resolveDasPerfil } from "./das";
+import { dasBreakdown, dasCompetenceKey, dasDueDate, dasPaidMap, lastBusinessDayOfMonth, nextBusinessDay, previousBusinessDay, resolveDasPerfil } from "./das";
 import { cashDeltaForInvestmentMove } from "./investments";
+import { isSimplesNacionalCompany } from "./plans";
 import type { Company, Entry, InvestmentMovement } from "./types";
 import { MONTHS } from "./types";
 import { addDaysIso, isoDate, monthIndex, todayIso, yearOf } from "./utils";
@@ -205,6 +206,21 @@ export type CalendarItem = {
   detail?: string;
 };
 
+/** Vencimento no dia do mês; se cair em fim de semana ou feriado, próximo dia útil. */
+export function dueOnBusinessDay(year: number, month: number, day: number) {
+  return isoDate(nextBusinessDay(new Date(year, month, day)));
+}
+
+/** Prazo “até o dia X”: se X for fim de semana/feriado, antecipa para o dia útil anterior. */
+export function dueOnOrBeforeBusinessDay(year: number, month: number, day: number) {
+  return isoDate(previousBusinessDay(new Date(year, month, day)));
+}
+
+/** Último dia útil do mês. */
+export function dueLastBusinessDayOfMonth(year: number, month: number) {
+  return isoDate(lastBusinessDayOfMonth(year, month));
+}
+
 /** Itens do calendário: títulos + DAS mensal + eventos manuais. */
 export function calendarItems(
   entries: Entry[],
@@ -241,24 +257,82 @@ export function calendarItems(
     }
   }
 
-  const paid = dasPaidMap(entries);
-  const perfil = company ? resolveDasPerfil(company) : null;
+  const isSn = isSimplesNacionalCompany(company);
+  const paid = isSn ? new Map<string, Entry>() : dasPaidMap(entries);
+  const perfil = !isSn && company ? resolveDasPerfil(company) : null;
   for (const y of [year - 1, year]) {
     for (let competenceMonth = 0; competenceMonth < 12; competenceMonth++) {
       const due = dasDueDate(y, competenceMonth);
       if (!due.startsWith(key)) continue;
       const ckey = dasCompetenceKey(y, competenceMonth);
       const alreadyPaid = paid.has(ckey);
+      const ref = `${MONTHS[competenceMonth]}/${y}`;
+      if (isSn) {
+        items.push({
+          id: `das:${ckey}`,
+          date: due,
+          kind: "agendado",
+          title: `DAS Simples Nacional · ${ref}`,
+          valor: 0,
+          href: "/app/simples",
+          detail: "Vencimento da guia — valor conforme o faturamento",
+        });
+        continue;
+      }
       const total = perfil ? dasBreakdown(perfil, y, competenceMonth).total : 0;
       items.push({
         id: `das:${ckey}`,
         date: due,
         kind: "agendado",
-        title: alreadyPaid ? `DAS mensal · ${MONTHS[competenceMonth]}/${y} (pago)` : `DAS mensal · ${MONTHS[competenceMonth]}/${y}`,
+        title: alreadyPaid ? `DAS mensal · ${ref} (pago)` : `DAS mensal · ${ref}`,
         valor: total,
         href: "/app/das",
         detail: alreadyPaid ? "Competência quitada" : "Vencimento da guia DAS",
       });
+    }
+  }
+
+  // Obrigações mensais do Simples Nacional
+  if (isSn) {
+    for (const y of [year - 1, year]) {
+      for (let m = 0; m < 12; m++) {
+        const esocialDue = dueOnOrBeforeBusinessDay(y, m, 15);
+        if (esocialDue.startsWith(key)) {
+          items.push({
+            id: `sn-esocial:${y}-${String(m + 1).padStart(2, "0")}`,
+            date: esocialDue,
+            kind: "agendado",
+            title: "eSocial",
+            valor: 0,
+            href: "/app/folha",
+            detail: "Envio das declarações periódicas",
+          });
+        }
+        const dctfDue = dueLastBusinessDayOfMonth(y, m);
+        if (dctfDue.startsWith(key)) {
+          items.push({
+            id: `sn-dctfweb:${y}-${String(m + 1).padStart(2, "0")}`,
+            date: dctfDue,
+            kind: "agendado",
+            title: "DCTFWeb",
+            valor: 0,
+            href: "/app/folha",
+            detail: "Vencimento no último dia útil do mês",
+          });
+        }
+        const fgtsDue = dueOnBusinessDay(y, m, 20);
+        if (fgtsDue.startsWith(key)) {
+          items.push({
+            id: `sn-fgts:${y}-${String(m + 1).padStart(2, "0")}`,
+            date: fgtsDue,
+            kind: "agendado",
+            title: "Recolhimento do FGTS",
+            valor: 0,
+            href: "/app/folha",
+            detail: "Vencimento no dia 20 ou próximo dia útil",
+          });
+        }
+      }
     }
   }
 

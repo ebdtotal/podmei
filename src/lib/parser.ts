@@ -195,6 +195,8 @@ export function draftToEntries(draft: ParsedDraft, source: Entry["source"]): Ent
     const { liquido } = draftPricing(draft);
     const seriesId = uid("ser");
     const n = dates.length;
+    const stockQty =
+      draft.productId && draft.quantidade && draft.quantidade > 0 ? draft.quantidade : draft.productId ? 1 : undefined;
 
     return dates.map((vencimento, i) => ({
       ...draftToEntry(
@@ -214,6 +216,7 @@ export function draftToEntries(draft: ParsedDraft, source: Entry["source"]): Ent
       descontoValor: 0,
       seriesId,
       seriesKind: "recorrente" as const,
+      ...(i === 0 && stockQty != null ? { stockQty } : { stockQty: undefined }),
     }));
   }
 
@@ -252,7 +255,14 @@ export function draftToEntries(draft: ParsedDraft, source: Entry["source"]): Ent
     });
   }
 
-  if (saldo <= 0) return out.length ? out : [draftToEntry(draft, source)];
+  if (saldo <= 0) {
+    const single = out.length ? out : [draftToEntry(draft, source)];
+    if (draft.productId) {
+      const stockQty = draft.quantidade && draft.quantidade > 0 ? draft.quantidade : 1;
+      single[0] = { ...single[0], stockQty, seriesId: single[0].seriesId || seriesId, seriesKind: single[0].seriesKind || "parcelado" };
+    }
+    return single;
+  }
 
   const parts = splitEqualCents(saldo, n);
   parts.forEach((valor, i) => {
@@ -279,6 +289,11 @@ export function draftToEntries(draft: ParsedDraft, source: Entry["source"]): Ent
       seriesKind: "parcelado",
     });
   });
+
+  if (out.length && draft.productId) {
+    const stockQty = draft.quantidade && draft.quantidade > 0 ? draft.quantidade : 1;
+    out[0] = { ...out[0], stockQty };
+  }
 
   return out;
 }

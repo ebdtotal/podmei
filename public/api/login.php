@@ -101,7 +101,10 @@ if ($signup) {
   $temp = "";
   for ($i = 0; $i < 10; $i++) $temp .= $chars[random_int(0, strlen($chars) - 1)];
   $hash = password_hash($temp, PASSWORD_DEFAULT);
-  $plan = (($signup["plan"] ?? "") === "contador") ? "contador" : "pro";
+  $plan = in_array(($signup["plan"] ?? ""), ["pro", "premium", "contador", "contador_premium"], true)
+    ? (string) $signup["plan"]
+    : "pro";
+  $role = ($plan === "contador" || $plan === "contador_premium") ? "contador" : "pro";
 
   $ust = $pdo->prepare("SELECT * FROM users WHERE id = ? OR lower(email) = lower(?) LIMIT 1");
   $ust->execute([(string) ($signup["user_id"] ?? ""), $email]);
@@ -114,7 +117,7 @@ if ($signup) {
     $userId = podmei_uid("usr");
     $pdo->prepare("INSERT INTO users (id,username,email,nome,password_hash,role,plan,status,must_change_password,telefone,cnpj,empresa,created_at)
       VALUES (?,?,?,?,?,?,?,?,0,?,?,?,?)")->execute([
-      $userId, $username, $email, $signup["nome"], $hash, $plan, $plan, "ativo",
+      $userId, $username, $email, $signup["nome"], $hash, $role, $plan, "ativo",
       $signup["telefone"] ?? "", $signup["cnpj"] ?? "", $signup["empresa"] ?? "", gmdate("Y-m-d\\TH:i:s\\Z"),
     ]);
     $pdo->prepare("UPDATE signups SET user_id=?, username=? WHERE id=?")->execute([$userId, $username, $signup["id"]]);

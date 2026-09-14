@@ -1,6 +1,7 @@
 import type { CSSProperties } from "react";
 import type { Company, Employee } from "@/lib/types";
 import { MONTHS } from "@/lib/types";
+import { formatMoney } from "@/lib/utils";
 
 type Slip = {
   bruto: number;
@@ -20,7 +21,7 @@ type Line = {
 };
 
 function money(value: number) {
-  return value.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  return formatMoney(value);
 }
 
 function hoursRef(employee: Employee) {

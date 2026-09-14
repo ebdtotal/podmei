@@ -5,7 +5,13 @@ function mp_enabled($config) {
 }
 
 function plan_label($plan, $cycle) {
-  $name = $plan === "contador" ? "PODMEI Contador" : "PODMEI Pro";
+  $names = [
+    "pro" => "PODMEI Pro",
+    "premium" => "PODMEI Premium",
+    "contador" => "PODMEI Contador",
+    "contador_premium" => "PODMEI Contador Premium",
+  ];
+  $name = $names[$plan] ?? "PODMEI Pro";
   return $name . " — " . ($cycle === "year" ? "anual" : "mensal");
 }
 

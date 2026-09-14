@@ -71,6 +71,14 @@ export function chargePhone(entry: Entry, contacts: Contact[] | undefined) {
   return (linked?.telefone || byName?.telefone || "").trim();
 }
 
+export function chargeEmail(entry: Entry, contacts: Contact[] | undefined) {
+  const linked = entry.contactId ? contacts?.find((c) => c.id === entry.contactId) : undefined;
+  const byName = contacts?.find(
+    (c) => c.kind === "cliente" && c.nome.trim().toLowerCase() === entry.contraparte.trim().toLowerCase(),
+  );
+  return (linked?.email || byName?.email || "").trim().toLowerCase();
+}
+
 export function whatsappHref(phone: string, text: string) {
   const digits = phone.replace(/\D/g, "");
   const withCountry = digits.length >= 12 ? digits : digits.length >= 10 ? `55${digits}` : "";

@@ -2,6 +2,7 @@ import { useState, type FormEvent } from "react";
 import { useNavigate } from "react-router-dom";
 import { Logo } from "@/components/brand/Logo";
 import { useAuth } from "@/lib/auth";
+import { isContadorPlan } from "@/lib/plans";
 import { platform } from "@/lib/platform";
 
 export function ChangePasswordPage() {
@@ -23,7 +24,14 @@ export function ChangePasswordPage() {
     try {
       const next = await platform.changePassword(password);
       refresh(next);
-      navigate(next.role === "master" ? "/master" : next.plan === "contador" ? "/contador" : "/app", { replace: true });
+      navigate(
+        next.role === "master"
+          ? "/master"
+          : isContadorPlan(next.plan)
+            ? "/contador"
+            : "/app",
+        { replace: true },
+      );
     } catch (err) {
       setError(err instanceof Error ? err.message : "Não foi possível salvar a senha.");
     } finally {

@@ -1,4 +1,5 @@
 import { createContext, useContext, useMemo, useState, type ReactNode } from "react";
+import { isContadorPlan, normalizePlan } from "./plans";
 import { platform } from "./platform";
 import type { SessionUser } from "./platform-types";
 import { createMeiClient } from "./store";
@@ -15,19 +16,22 @@ interface AuthValue {
 const AuthContext = createContext<AuthValue | null>(null);
 
 export function emptyWorkspaceFromUser(user: SessionUser): Workspace {
-  const isContador = user.plan === "contador" || user.role === "master";
+  const plan = user.role === "master" ? "contador" : normalizePlan(user.plan);
+  const contador = isContadorPlan(plan) || user.role === "master";
+  const sn = plan === "contador_premium";
   const client = createMeiClient({
-    plan: isContador ? "contador" : user.plan === "premium" ? "premium" : "pro",
+    plan,
     company: {
-      nome: user.empresa || "Novo MEI",
+      nome: user.empresa || (sn ? "Escritório Contábil" : "Novo MEI"),
       email: user.email,
       telefone: user.telefone || "",
       cnpj: user.cnpj || "",
+      ...(sn ? { regimeTributario: "simples_nacional" as const, limiteFaturamento: 0 } : {}),
     },
   });
   return {
     accountant: {
-      nome: isContador ? user.nome : "",
+      nome: contador ? user.nome : "",
       crc: "",
       email: user.email,
       telefone: user.telefone || "",

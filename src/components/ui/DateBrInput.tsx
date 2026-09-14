@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { formatDate, maskDateBr, parseDateBr } from "@/lib/utils";
 
-/** Campo de data em dd/mm/aaaa; valor externo permanece ISO (yyyy-mm-dd). */
+/** Campo de data em DD/MM/AAAA; valor externo permanece ISO (yyyy-mm-dd). */
 export function DateBrInput({
   value,
   onChange,
@@ -9,7 +9,7 @@ export function DateBrInput({
   required,
   id,
   name,
-  placeholder = "dd/mm/aaaa",
+  placeholder = "DD/MM/AAAA",
 }: {
   value: string;
   onChange: (iso: string) => void;

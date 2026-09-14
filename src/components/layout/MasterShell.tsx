@@ -22,11 +22,11 @@ export function MasterShell() {
   return (
     <div className="min-h-screen bg-bg text-ink">
       <aside className="fixed inset-y-0 left-0 z-20 hidden w-60 flex-col border-r border-line bg-paper md:flex">
-        <div className="px-5 py-5">
+        <div className="shrink-0 px-5 py-5">
           <Logo to="/master" />
           <p className="mt-2 text-[11px] font-semibold uppercase tracking-wider text-orange">Acesso master</p>
         </div>
-        <nav className="flex flex-1 flex-col gap-1 px-3">
+        <nav className="flex min-h-0 flex-1 flex-col gap-1 overflow-y-auto overscroll-contain px-3 pb-2">
           {links.map((link) => (
             <NavLink
               key={link.to}
@@ -51,7 +51,7 @@ export function MasterShell() {
             Abrir MEI ativo
           </NavLink>
         </nav>
-        <div className="m-3 rounded-xl border border-line bg-bg p-3">
+        <div className="m-3 shrink-0 rounded-xl border border-line bg-bg p-3">
           <p className="text-[11px] uppercase tracking-wider text-mute">Master</p>
           <p className="mt-1 text-sm font-semibold">{user?.nome || user?.username}</p>
           <p className="mt-1 text-xs text-mute">{user?.username}</p>

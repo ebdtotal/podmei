@@ -1,7 +1,7 @@
 import { useEffect, useRef } from "react";
 import { buildAlerts, buildPortfolioAlerts, filterAlertsForPlan, visibleAlerts } from "./alerts";
 import { useAuth } from "./auth";
-import { hasPremiumAccess, isPremiumPlan } from "./plans";
+import { hasPremiumAccess, isContadorPlan, isPremiumPlan } from "./plans";
 import { notifyAlerts, scheduleEventMorningNotifications } from "./notify";
 import { platform } from "./platform";
 import { useStore } from "./store";
@@ -17,7 +17,7 @@ export function AlertBridge() {
     if (!user || user.role === "master") return;
     const premium = hasPremiumAccess(user);
     const raw =
-      user.role === "contador"
+      user.role === "contador" || isContadorPlan(user.plan)
         ? buildPortfolioAlerts(clients)
         : buildAlerts(company, entries, undefined, { employee, payrolls });
     const alerts = filterAlertsForPlan(visibleAlerts(raw), premium);
@@ -30,8 +30,9 @@ export function AlertBridge() {
 
   useEffect(() => {
     if (!user || user.role === "master") return;
-    if (!isPremiumPlan(user.plan) && user.plan !== "contador" && user.role !== "contador") return;
-    const allEvents = user.role === "contador" ? clients.flatMap((c) => c.events ?? []) : events;
+    if (!isPremiumPlan(user.plan) && !isContadorPlan(user.plan) && user.role !== "contador") return;
+    const allEvents =
+      user.role === "contador" || isContadorPlan(user.plan) ? clients.flatMap((c) => c.events ?? []) : events;
     const stamp = `${user.id}:${allEvents.map((e) => `${e.id}:${e.date}:${e.title}`).join("|")}`;
     if (eventsStamp.current === stamp) return;
     eventsStamp.current = stamp;

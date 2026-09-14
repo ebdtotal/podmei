@@ -164,7 +164,7 @@ if ($action === "accept") {
   if ($token === "") cv_json(400, ["error" => "Convite inválido."]);
   $plan = (string) ($user["plan"] ?? "");
   $role = (string) ($user["role"] ?? "");
-  if ($plan !== "contador" && $role !== "master") {
+  if ($plan !== "contador" && $plan !== "contador_premium" && $role !== "master") {
     cv_json(403, ["error" => "Aceite o convite com uma conta PODMEI Contador."]);
   }
   $st = $pdo->prepare("SELECT * FROM accountant_invites WHERE token = ? LIMIT 1");

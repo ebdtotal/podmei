@@ -4,14 +4,16 @@ import { companyTypeLabel, MEI_FATURAMENTO } from "@/lib/mei";
 import { dasPerfilFromTipo, dasPerfilLabel } from "@/lib/das";
 import { useAuth } from "@/lib/auth";
 import { allowsExternalPurchaseUi, isIosApp } from "@/lib/native";
-import { plans } from "@/lib/plans";
+import { isContadorPlan, plans } from "@/lib/plans";
 import { platform, type AccountantInvite } from "@/lib/platform";
 import type { Subscription } from "@/lib/platform-types";
 import { useStore } from "@/lib/store";
-import type { Company, CompanyType, DasPerfil, PixTipo } from "@/lib/types";
+import type { Company, CompanyType, DasPerfil, PixTipo, RegimeTributario } from "@/lib/types";
 import { inferPixTipo, normalizePixKey, pixTipoLabel } from "@/lib/charge";
 import { stripLogoBackground } from "@/lib/logo";
 import { formatMoney } from "@/lib/utils";
+import { DateBrInput } from "@/components/ui/DateBrInput";
+import { MoneyBrInput } from "@/components/ui/MoneyBrInput";
 
 const statusLabel: Record<string, string> = {
   ativa: "Ativa (recorrente)",
@@ -72,7 +74,7 @@ export function EmpresaPage() {
   }, [user]);
 
   useEffect(() => {
-    if (!user || user.role === "master" || user.plan === "contador") return;
+    if (!user || user.role === "master" || isContadorPlan(user.plan)) return;
     void platform
       .accountantInvites()
       .then((data) => setInvites(data.sent))
@@ -360,24 +362,48 @@ export function EmpresaPage() {
             </select>
           </Field>
           <Field label="Data de abertura">
-            <input type="date" className="input" value={form.dataAbertura} onChange={(e) => patch("dataAbertura", e.target.value)} />
+            <DateBrInput
+              className="input"
+              value={form.dataAbertura || ""}
+              onChange={(dataAbertura) => patch("dataAbertura", dataAbertura)}
+            />
           </Field>
           <Field label="Capital social">
-            <input
-              type="number"
+            <MoneyBrInput
               className="input"
-              value={form.capitalSocial}
-              onChange={(e) => patch("capitalSocial", Number(e.target.value))}
+              value={form.capitalSocial || 0}
+              onChange={(capitalSocial) => patch("capitalSocial", capitalSocial)}
+              min={0}
             />
           </Field>
+          <Field label="Regime tributário">
+            <select
+              className="input"
+              value={form.regimeTributario ?? "mei"}
+              onChange={(e) => {
+                const regimeTributario = e.target.value as RegimeTributario;
+                setForm((prev) => ({
+                  ...prev,
+                  regimeTributario,
+                  limiteFaturamento:
+                    regimeTributario === "simples_nacional" ? 0 : prev.limiteFaturamento || MEI_FATURAMENTO,
+                }));
+              }}
+            >
+              <option value="mei">MEI (teto R$ 81 mil)</option>
+              <option value="simples_nacional">Simples Nacional (sem teto MEI)</option>
+            </select>
+          </Field>
+          {(form.regimeTributario ?? "mei") === "mei" ? (
           <Field label="Limite de faturamento anual">
-            <input
-              type="number"
+            <MoneyBrInput
               className="input"
-              value={form.limiteFaturamento}
-              onChange={(e) => patch("limiteFaturamento", Number(e.target.value))}
+              value={form.limiteFaturamento || 0}
+              onChange={(limiteFaturamento) => patch("limiteFaturamento", limiteFaturamento)}
+              min={0}
             />
           </Field>
+          ) : null}
           <Field label="Perfil do DAS">
             <select
               className="input"
@@ -393,8 +419,9 @@ export function EmpresaPage() {
           </Field>
         </div>
         <p className="mt-3 text-xs text-mute">
-          Padrão MEI: {formatMoney(MEI_FATURAMENTO)} de receita no ano e compras até 80% do limite proporcional
-          (abertura no meio do ano reduz o teto). Altere o faturamento só se a regra oficial mudar.
+          {(form.regimeTributario ?? "mei") === "simples_nacional"
+            ? "Escritório e empresas do Simples Nacional não usam o teto de R$ 81 mil do MEI. Contador não pode ser MEI."
+            : `Padrão MEI: ${formatMoney(MEI_FATURAMENTO)} de receita no ano e compras até 80% do limite proporcional (abertura no meio do ano reduz o teto). Altere o faturamento só se a regra oficial mudar.`}
         </p>
       </section>
 
@@ -467,7 +494,7 @@ export function EmpresaPage() {
       </button>
       {saved ? <p className="text-sm text-green">Cadastro atualizado.</p> : null}
 
-      {user && user.role !== "master" && user.plan !== "contador" ? (
+      {user && user.role !== "master" && !isContadorPlan(user.plan) ? (
         <section className="rounded-2xl border border-line bg-paper p-5">
           <h2 className="text-sm font-semibold">Convidar o contador</h2>
           <p className="mt-1 text-sm text-mute">
@@ -553,7 +580,7 @@ export function EmpresaPage() {
                   </button>
                 ) : null}
                 {allowsExternalPurchaseUi() || isIosApp() ? (
-                  <Link to={`/assinar/${sub.plan === "contador" ? "contador" : sub.plan === "premium" ? "premium" : "pro"}`} className="btn-ghost">
+                  <Link to={`/assinar/${sub.plan === "contador_premium" ? "contador_premium" : sub.plan === "contador" ? "contador" : sub.plan === "premium" ? "premium" : "pro"}`} className="btn-ghost">
                     Trocar / renovar plano
                   </Link>
                 ) : null}

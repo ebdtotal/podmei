@@ -102,6 +102,15 @@ export function payrollCompetenceKey(year: number, month: number, kind: PayrollK
   return `${kind}-${year}-${String(month + 1).padStart(2, "0")}`;
 }
 
+export function payrollMapKey(
+  employeeId: string,
+  year: number,
+  month: number,
+  kind: PayrollKind,
+) {
+  return `${employeeId}:${payrollCompetenceKey(year, month, kind)}`;
+}
+
 export function competenceLabel(year: number, month: number) {
   return `${String(month + 1).padStart(2, "0")}/${year}`;
 }
@@ -216,7 +225,7 @@ export function hasActiveEmployee(
 export function payrollMap(payrolls: PayrollRun[] | undefined) {
   const map = new Map<string, PayrollRun>();
   for (const run of payrolls ?? []) {
-    map.set(payrollCompetenceKey(run.year, run.month, run.kind), run);
+    map.set(payrollMapKey(run.employeeId || "legacy", run.year, run.month, run.kind), run);
   }
   return map;
 }

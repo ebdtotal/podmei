@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import { MoneyBrInput } from "@/components/ui/MoneyBrInput";
 import { goalProgress } from "@/lib/insights";
 import { proportionalLimit, totalRevenue, yearEntries } from "@/lib/mei";
 import { useStore } from "@/lib/store";
@@ -15,13 +16,13 @@ export function MetasPage() {
   const billedMonth = totalRevenue(monthList);
   const fatLimit = proportionalLimit(company, year);
 
-  const [metaMes, setMetaMes] = useState(String(company.metaFaturamentoMes ?? ""));
-  const [metaAno, setMetaAno] = useState(String(company.metaFaturamentoAno ?? Math.round(fatLimit)));
+  const [metaMes, setMetaMes] = useState(Number(company.metaFaturamentoMes) || 0);
+  const [metaAno, setMetaAno] = useState(Number(company.metaFaturamentoAno) || Math.round(fatLimit));
   const [lembrete, setLembrete] = useState(String(company.lembreteContasDias ?? 3));
   const [saved, setSaved] = useState("");
 
-  const mesGoal = goalProgress(billedMonth, Number(metaMes) || 0);
-  const anoGoal = goalProgress(billedYear, Number(metaAno) || 0);
+  const mesGoal = goalProgress(billedMonth, metaMes || 0);
+  const anoGoal = goalProgress(billedYear, metaAno || 0);
   const limiteGoal = goalProgress(billedYear, fatLimit);
 
   const tip = useMemo(() => {
@@ -37,8 +38,8 @@ export function MetasPage() {
   function save() {
     setCompany({
       ...company,
-      metaFaturamentoMes: Number(metaMes) || 0,
-      metaFaturamentoAno: Number(metaAno) || 0,
+      metaFaturamentoMes: metaMes || 0,
+      metaFaturamentoAno: metaAno || 0,
       lembreteContasDias: Math.max(1, Math.min(30, Number(lembrete) || 3)),
     });
     setSaved("Metas salvas.");
@@ -64,16 +65,23 @@ export function MetasPage() {
         <h2 className="text-sm font-semibold">Definir metas</h2>
         <div className="mt-4 grid gap-3 sm:grid-cols-3">
           <label className="text-xs font-medium text-mute">
-            Meta do mês (R$)
-            <input className="input mt-1.5" type="number" min="0" step="100" value={metaMes} onChange={(e) => setMetaMes(e.target.value)} />
+            Meta do mês
+            <MoneyBrInput className="input mt-1.5" value={metaMes} onChange={setMetaMes} min={0} />
           </label>
           <label className="text-xs font-medium text-mute">
-            Meta do ano (R$)
-            <input className="input mt-1.5" type="number" min="0" step="100" value={metaAno} onChange={(e) => setMetaAno(e.target.value)} />
+            Meta do ano
+            <MoneyBrInput className="input mt-1.5" value={metaAno} onChange={setMetaAno} min={0} />
           </label>
           <label className="text-xs font-medium text-mute">
             Lembrete a receber/pagar (dias antes)
-            <input className="input mt-1.5" type="number" min="1" max="30" value={lembrete} onChange={(e) => setLembrete(e.target.value)} />
+            <input
+              className="input mt-1.5"
+              type="number"
+              min="1"
+              max="30"
+              value={lembrete}
+              onChange={(e) => setLembrete(e.target.value)}
+            />
           </label>
         </div>
         <div className="mt-4 flex flex-wrap items-center gap-3">

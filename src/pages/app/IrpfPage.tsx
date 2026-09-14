@@ -1,8 +1,10 @@
 import { Printer } from "lucide-react";
 import { useMemo, useState } from "react";
+import { Navigate } from "react-router-dom";
 import { BackToReports } from "@/components/layout/BackToReports";
 import { dasBreakdown, resolveDasPerfil } from "@/lib/das";
 import { IRPF_LIMITE, irpfSplit, presumedProfitRate, yearEntries } from "@/lib/mei";
+import { isSimplesNacionalCompany } from "@/lib/plans";
 import { printOrSharePdf } from "@/lib/print";
 import { useStore } from "@/lib/store";
 import type { Company } from "@/lib/types";
@@ -33,6 +35,7 @@ export function IrpfPage() {
   const years = Array.from({ length: 8 }, (_, i) => currentYear() - i);
   const nome = company.nome?.trim() || "informe o nome em Empresa";
   const cnpj = company.cnpj?.trim() || "informe o CNPJ em Empresa";
+  const office = isSimplesNacionalCompany(company);
 
   const report = useMemo(() => {
     const split = irpfSplit(yearEntries(entries, year));
@@ -51,6 +54,10 @@ export function IrpfPage() {
       : `Pela renda do MEI neste ano, o tributável ficou em ${formatMoney(split.tributavel)} (limite ${formatMoney(IRPF_LIMITE)}) e o isento em ${formatMoney(split.isento)}. Isso, sozinho, não obriga a declaração.`;
     return { ...split, months, inssMes, inss, precisa, motivo };
   }, [company, entries, year]);
+
+  if (office) {
+    return <Navigate to="/app/relatorios" replace />;
+  }
 
   return (
     <div className="space-y-4">

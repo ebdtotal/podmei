@@ -57,13 +57,20 @@ function pay_plan_price(string $plan, string $cycle, bool $test = false): float 
     "pro" => ["month" => 29.9, "year" => 299.0],
     "premium" => ["month" => 49.9, "year" => 499.0],
     "contador" => ["month" => 97.9, "year" => 977.0],
+    "contador_premium" => ["month" => 147.9, "year" => 1477.0],
   ];
   if (!isset($prices[$plan])) $plan = "pro";
   return $cycle === "year" ? $prices[$plan]["year"] : $prices[$plan]["month"];
 }
 function pay_plan_title(string $plan, string $cycle, bool $test = false): string {
   if ($test || $plan === "teste") return "Teste PODMEI R$ 2,00";
-  $name = $plan === "contador" ? "PODMEI Contador" : ($plan === "premium" ? "PODMEI Premium" : "PODMEI Pro");
+  $names = [
+    "pro" => "PODMEI Pro",
+    "premium" => "PODMEI Premium",
+    "contador" => "PODMEI Contador",
+    "contador_premium" => "PODMEI Contador Premium",
+  ];
+  $name = $names[$plan] ?? "PODMEI Pro";
   return $name . " — " . ($cycle === "year" ? "anual" : "mensal");
 }
 function pay_db(): PDO { return podmei_db(); }
@@ -225,7 +232,8 @@ function pay_iniciar_assinatura(array $in): array {
   $telefone = trim((string) ($in["telefone"] ?? ""));
   $cnpj = trim((string) ($in["cnpj"] ?? ""));
   $empresa = trim((string) ($in["empresa"] ?? ""));
-  $plan = ($in["plan"] ?? "") === "contador" ? "contador" : (($in["plan"] ?? "") === "premium" ? "premium" : "pro");
+  $rawPlan = (string) ($in["plan"] ?? "pro");
+  $plan = in_array($rawPlan, ["pro", "premium", "contador", "contador_premium"], true) ? $rawPlan : "pro";
   $cycle = ($in["cycle"] ?? "") === "year" ? "year" : "month";
   $isTest = !empty($in["test"]) || ($in["plan"] ?? "") === "teste" || ($in["action"] ?? "") === "checkout-test";
   if ($nome === "") pay_json_err("Informe o nome completo.");
@@ -412,8 +420,8 @@ function pay_ativar_signup(string $signupId, string $paymentId): array {
   $email = strtolower(trim((string) $row["email"]));
   $username = $email;
   $rawPlan = (string) ($row["plan"] ?? "pro");
-  $plan = in_array($rawPlan, ["pro", "premium", "contador"], true) ? $rawPlan : "pro";
-  $role = $plan === "contador" ? "contador" : "pro";
+  $plan = in_array($rawPlan, ["pro", "premium", "contador", "contador_premium"], true) ? $rawPlan : "pro";
+  $role = ($plan === "contador" || $plan === "contador_premium") ? "contador" : "pro";
   $cycle = (($row["cycle"] ?? "") === "year") ? "year" : "month";
   $amount = floatval($row["amount"]);
   $hash = password_hash($temp, PASSWORD_DEFAULT);
@@ -516,20 +524,43 @@ function pay_ativar_signup(string $signupId, string $paymentId): array {
 function pay_criar_conta_teste(array $in = []): array {
   $pdo = pay_db();
   $rawPlan = (string) ($in["plan"] ?? "pro");
-  $plan = in_array($rawPlan, ["pro", "premium", "contador"], true) ? $rawPlan : "pro";
-  $role = $plan === "contador" ? "contador" : "pro";
-  $defaultEmail =
-    $plan === "contador"
-      ? "contador.teste@podmei.com"
-      : ($plan === "premium" ? "premium.demo@podmei.com" : "pro.teste@podmei.com");
-  $defaultNome =
-    $plan === "contador"
-      ? "Contador Teste PODMEI"
-      : ($plan === "premium" ? "Premium Demo PODMEI" : "Pro Teste PODMEI");
-  $email = strtolower(trim((string) ($in["email"] ?? $defaultEmail)));
-  $username = trim((string) ($in["username"] ?? ($plan === "premium" ? "premium.demo" : $email)));
-  $nome = trim((string) ($in["nome"] ?? $defaultNome));
-  $password = (string) ($in["password"] ?? ($plan === "premium" ? "Premium@Teste26" : "Contador@Teste26"));
+  $plan = in_array($rawPlan, ["pro", "premium", "contador", "contador_premium"], true) ? $rawPlan : "pro";
+  $role = ($plan === "contador" || $plan === "contador_premium") ? "contador" : "pro";
+  $defaults = [
+    "pro" => [
+      "email" => "pro.teste@podmei.com",
+      "username" => "pro.teste",
+      "nome" => "Pro Teste PODMEI",
+      "password" => "Contador@Teste26",
+      "empresa" => "Escritório Teste",
+    ],
+    "premium" => [
+      "email" => "premium.demo@podmei.com",
+      "username" => "premium.demo",
+      "nome" => "Premium Demo PODMEI",
+      "password" => "Premium@Teste26",
+      "empresa" => "MEI Demo Premium",
+    ],
+    "contador" => [
+      "email" => "contador.teste@podmei.com",
+      "username" => "contador.teste",
+      "nome" => "Contador Teste PODMEI",
+      "password" => "Contador@Teste26",
+      "empresa" => "Escritório Teste",
+    ],
+    "contador_premium" => [
+      "email" => "contador.premium@podmei.com",
+      "username" => "contador.premium",
+      "nome" => "Contador Premium Demo",
+      "password" => "ContadorPremium@Teste26",
+      "empresa" => "Escritório Contábil Demo",
+    ],
+  ];
+  $def = $defaults[$plan];
+  $email = strtolower(trim((string) ($in["email"] ?? $def["email"])));
+  $username = trim((string) ($in["username"] ?? $def["username"]));
+  $nome = trim((string) ($in["nome"] ?? $def["nome"]));
+  $password = (string) ($in["password"] ?? $def["password"]);
   if (strlen($password) < 8) pay_json_err("Senha de teste precisa ter pelo menos 8 caracteres.");
   if (!pay_email_ok($email)) pay_json_err("E-mail de teste inválido.");
   if ($username === "") $username = $email;
@@ -541,6 +572,7 @@ function pay_criar_conta_teste(array $in = []): array {
   $started = pay_today();
   $nextDue = pay_add_months($started, $cycle === "year" ? 12 : 1);
   $signupId = pay_uid("ass");
+  $empresa = $def["empresa"];
 
   $existing = $pdo->prepare("SELECT * FROM users WHERE lower(email) = lower(?) OR lower(username) = lower(?) LIMIT 1");
   $existing->execute([$email, $username]);
@@ -552,8 +584,8 @@ function pay_criar_conta_teste(array $in = []): array {
   if ($u) {
     $userId = (string) $u["id"];
     $username = (string) $u["username"];
-    $pdo->prepare("UPDATE users SET password_hash=?, status='ativo', must_change_password=0, nome=?, plan=?, role=?, email=? WHERE id=?")
-      ->execute([$hash, $nome, $plan, $role, $email, $userId]);
+    $pdo->prepare("UPDATE users SET password_hash=?, status='ativo', must_change_password=0, nome=?, plan=?, role=?, email=?, empresa=? WHERE id=?")
+      ->execute([$hash, $nome, $plan, $role, $email, $empresa, $userId]);
   } else {
     $userId = pay_uid("usr");
     $chk = $pdo->prepare("SELECT id FROM users WHERE lower(username) = lower(?)");
@@ -561,7 +593,7 @@ function pay_criar_conta_teste(array $in = []): array {
     if ($chk->fetch()) $username = preg_replace("/@.*/", "", $email) . "_teste";
     $pdo->prepare("INSERT INTO users (id,username,email,nome,password_hash,role,plan,status,must_change_password,telefone,cnpj,empresa,created_at)
       VALUES (?,?,?,?,?,?,?,?,0,?,?,?,?)")->execute([
-      $userId, $username, $email, $nome, $hash, $role, $plan, "ativo", "", "", $plan === "premium" ? "MEI Demo Premium" : "Escritório Teste", $now,
+      $userId, $username, $email, $nome, $hash, $role, $plan, "ativo", "", "", $empresa, $now,
     ]);
   }
 
@@ -574,7 +606,7 @@ function pay_criar_conta_teste(array $in = []): array {
 
   $pdo->prepare("INSERT INTO signups (id,nome,email,telefone,cnpj,empresa,plan,cycle,amount,status,created_at,user_id,username,pago_em,mp_payment_id)
     VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)")->execute([
-    $signupId, $nome, $email, "", "", "Escritório Teste", $plan, $cycle, $amount, "pago", $now, $userId, $username, $now, "manual_teste",
+    $signupId, $nome, $email, "", "", $empresa, $plan, $cycle, $amount, "pago", $now, $userId, $username, $now, "manual_teste",
   ]);
 
   return [
@@ -887,6 +919,8 @@ function pay_product_to_plan(string $productId): array {
     "br.com.podmei.app.premium.year" => ["plan" => "premium", "cycle" => "year"],
     "br.com.podmei.app.contador.month" => ["plan" => "contador", "cycle" => "month"],
     "br.com.podmei.app.contador.year" => ["plan" => "contador", "cycle" => "year"],
+    "br.com.podmei.app.contadorpremium.month" => ["plan" => "contador_premium", "cycle" => "month"],
+    "br.com.podmei.app.contadorpremium.year" => ["plan" => "contador_premium", "cycle" => "year"],
   ];
   if (!isset($map[$productId])) {
     pay_json_err("Produto Apple inválido: " . $productId);

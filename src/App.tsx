@@ -20,13 +20,16 @@ import { LimitesPage } from "./pages/app/LimitesPage";
 import { LivroCaixaPage } from "./pages/app/LivroCaixaPage";
 import { LivroRazaoPage } from "./pages/app/LivroRazaoPage";
 import { ProdutosPage } from "./pages/app/ProdutosPage";
+import { EstoquePage } from "./pages/app/EstoquePage";
 import { RecibosPage } from "./pages/app/RecibosPage";
 import { RelatorioOficialPage } from "./pages/app/RelatorioOficialPage";
 import { RelatoriosPage } from "./pages/app/RelatoriosPage";
+import { SimplesNacionalPage } from "./pages/app/SimplesNacionalPage";
 import { AssinarRetornoPage } from "./pages/AssinarRetornoPage";
 import { CheckoutPage } from "./pages/CheckoutPage";
 import { CalendarioPage } from "./pages/app/CalendarioPage";
 import { CarteiraPage } from "./pages/contador/CarteiraPage";
+import { ContadorHomePage } from "./pages/contador/ContadorHomePage";
 import { ConvitePage } from "./pages/ConvitePage";
 import { EscritorioPage } from "./pages/contador/EscritorioPage";
 import { InvestimentosPage } from "./pages/app/InvestimentosPage";
@@ -86,14 +89,17 @@ export default function App() {
           </RequireAuth>
         }
       >
-        <Route index element={<CarteiraPage />} />
+        <Route index element={<ContadorHomePage />} />
+        <Route path="carteira" element={<CarteiraPage />} />
         <Route path="escritorio" element={<EscritorioPage />} />
       </Route>
       <Route path="/app" element={<AppShell />}>
         <Route index element={<DashboardPage />} />
         <Route path="empresa" element={<EmpresaPage />} />
+        <Route path="escritorio" element={<EscritorioPage />} />
         <Route path="cadastros" element={<CadastrosPage />} />
         <Route path="produtos" element={<ProdutosPage />} />
+        <Route path="estoque" element={<EstoquePage />} />
         <Route path="lancamentos" element={<LancamentosPage />} />
         <Route path="extrato" element={<ExtratoPage />} />
         <Route path="recibos" element={<RecibosPage />} />
@@ -135,6 +141,14 @@ export default function App() {
           element={
             <RequirePremium>
               <FolhaPage />
+            </RequirePremium>
+          }
+        />
+        <Route
+          path="simples"
+          element={
+            <RequirePremium>
+              <SimplesNacionalPage />
             </RequirePremium>
           }
         />

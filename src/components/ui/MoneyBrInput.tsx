@@ -12,6 +12,8 @@ export function MoneyBrInput({
   placeholder = "R$ 0,00",
   autoFocus,
   min,
+  readOnly,
+  disabled,
   "aria-label": ariaLabel,
 }: {
   value: number;
@@ -24,6 +26,8 @@ export function MoneyBrInput({
   autoFocus?: boolean;
   /** Se informado, rejeita valores abaixo no blur (ex.: 0). */
   min?: number;
+  readOnly?: boolean;
+  disabled?: boolean;
   "aria-label"?: string;
 }) {
   const [text, setText] = useState(() => formatMoney(Number.isFinite(value) ? value : 0));
@@ -47,20 +51,26 @@ export function MoneyBrInput({
       autoFocus={autoFocus}
       placeholder={placeholder}
       required={required}
+      readOnly={readOnly}
+      disabled={disabled}
       aria-label={ariaLabel}
       value={text}
       onChange={(e) => {
+        if (readOnly || disabled) return;
         const masked = maskMoneyBr(e.target.value);
         setText(masked);
         onChange(parseMoneyBr(masked));
       }}
       onBlur={() => {
+        if (readOnly || disabled) return;
         let n = parseMoneyBr(text);
         if (min != null && n < min) n = min;
         setText(formatMoney(n));
         onChange(n);
       }}
-      onFocus={(e) => e.currentTarget.select()}
+      onFocus={(e) => {
+        if (!readOnly && !disabled) e.currentTarget.select();
+      }}
     />
   );
 }

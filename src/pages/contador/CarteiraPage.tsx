@@ -10,6 +10,7 @@ import { platform, type AccountantInvite } from "@/lib/platform";
 import { useStore } from "@/lib/store";
 import type { CompanyType, MeiClient, MeiStatus } from "@/lib/types";
 import { cn, currentYear, formatMoney, formatPercent } from "@/lib/utils";
+import { MoneyBrInput } from "@/components/ui/MoneyBrInput";
 
 export function CarteiraPage() {
   const { accountant, clients, activeClientId, updateClient, removeClient, selectClient, openSharedClient } =
@@ -53,6 +54,7 @@ export function CarteiraPage() {
   const rows = useMemo(() => {
     const t = q.toLowerCase();
     return clients
+      .filter((c) => c.company.regimeTributario !== "simples_nacional")
       .filter((c) => (status === "todos" ? true : c.status === status))
       .filter(
         (c) =>
@@ -63,7 +65,9 @@ export function CarteiraPage() {
       .map((client) => ({ client, snap: clientSnapshot(client, year) }));
   }, [clients, q, status, year]);
 
-  const ativos = clients.filter((c) => c.status === "ativo");
+  const ativos = clients.filter(
+    (c) => c.status === "ativo" && c.company.regimeTributario !== "simples_nacional",
+  );
   const ativoSnaps = useMemo(
     () => ativos.map((c) => clientSnapshot(c, year)),
     [ativos, year],
@@ -332,6 +336,8 @@ function NovoMeiForm({
               cidade: cidade.toUpperCase(),
               uf: uf.toUpperCase(),
               telefone,
+              regimeTributario: "mei",
+              limiteFaturamento: 81000,
             },
           });
           onSave(created);
@@ -363,12 +369,7 @@ function NovoMeiForm({
           <input className="input" value={telefone} onChange={(e) => setTelefone(e.target.value)} />
         </Field>
         <Field label="Honorário mensal">
-          <input
-            type="number"
-            className="input"
-            value={honorario}
-            onChange={(e) => setHonorario(Number(e.target.value))}
-          />
+          <MoneyBrInput className="input" value={honorario} onChange={setHonorario} min={0} />
         </Field>
         <Field label="Anotação interna">
           <input className="input" value={notes} onChange={(e) => setNotes(e.target.value)} />

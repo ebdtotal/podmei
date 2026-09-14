@@ -51,6 +51,7 @@ export function QuickProductModal({
       unidade: unidade.trim() || "un",
       observacao: "",
       createdAt: todayIso(),
+      ...(kind === "produto" ? { estoqueAtual: 0, estoqueMinimo: 0 } : {}),
     });
     onCreated(product);
     onClose();

@@ -44,9 +44,13 @@ export function isoDate(d: Date) {
 }
 
 export function formatDate(iso: string) {
-  const [y, m, d] = iso.split("-");
-  if (!y || !m || !d) return iso;
-  return `${d}/${m}/${y}`;
+  if (!iso) return "";
+  const raw = String(iso).trim();
+  // Já está em dd/mm/aaaa
+  if (/^\d{2}\/\d{2}\/\d{4}$/.test(raw)) return raw;
+  const m = raw.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (!m) return raw;
+  return `${m[3]}/${m[2]}/${m[1]}`;
 }
 
 /** Converte dd/mm/aaaa (ou dígitos) em ISO yyyy-mm-dd; inválida → "". */

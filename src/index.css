@@ -11,12 +11,20 @@
   --brand-line: #e5e7eb;
   --brand-bg: #f3f4f6;
   --brand-paper: #ffffff;
-  --brand-navy: #7b2cf5;
+  /* MEI / empresas da carteira — azul */
+  --brand-navy: #1e3a8a;
   --brand-navy-2: #2563eb;
   --brand-gold: #22c55e;
   --brand-orange: #f97316;
   --brand-brown: #8b5a2b;
   --brand-red: #ef4444;
+}
+
+/* Contador Premium · escritório (Simples) — roxo */
+.theme-contador {
+  --brand-navy: #7b2cf5;
+  --brand-navy-2: #6d28d9;
+  --brand-purple: #7b2cf5;
 }
 
 html.dark {
@@ -25,9 +33,14 @@ html.dark {
   --brand-line: #334155;
   --brand-bg: #0f172a;
   --brand-paper: #1e293b;
-  --brand-navy: #8b5cf6;
-  --brand-navy-2: #3b82f6;
+  --brand-navy: #3b82f6;
+  --brand-navy-2: #60a5fa;
   --brand-gold: #4ade80;
+}
+
+html.dark .theme-contador {
+  --brand-navy: #a78bfa;
+  --brand-navy-2: #8b5cf6;
 }
 
 @theme inline {

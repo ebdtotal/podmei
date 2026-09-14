@@ -4,7 +4,9 @@ import { plans } from "@/lib/plans";
 import { platform } from "@/lib/platform";
 import type { AccountRecord, Subscription, SubscriptionStatus } from "@/lib/platform-types";
 import type { BillingCycle, PlanKey } from "@/lib/types";
-import { cn, formatMoney } from "@/lib/utils";
+import { cn, formatDate, formatMoney } from "@/lib/utils";
+import { DateBrInput } from "@/components/ui/DateBrInput";
+import { MoneyBrInput } from "@/components/ui/MoneyBrInput";
 
 const statusLabels: Record<SubscriptionStatus, string> = {
   pendente: "Pendente",
@@ -33,7 +35,7 @@ export function MasterAssinaturasPage() {
     plan: PlanKey;
     cycle: BillingCycle;
     status: SubscriptionStatus;
-    amount: string;
+    amount: number;
     nextDue: string;
   } | null>(null);
 
@@ -63,7 +65,7 @@ export function MasterAssinaturasPage() {
           username: subscription.email,
           email: subscription.email,
           nome: subscription.nome,
-          role: subscription.plan === "contador" ? "contador" : "pro",
+          role: subscription.plan === "contador" || subscription.plan === "contador_premium" ? "contador" : "pro",
           plan: subscription.plan,
           status: subscription.status === "cancelada" ? "bloqueado" : "ativo",
           mustChangePassword: false,
@@ -105,7 +107,7 @@ export function MasterAssinaturasPage() {
       plan: row.subscription.plan,
       cycle: row.subscription.cycle,
       status: row.subscription.status,
-      amount: String(row.subscription.amount),
+      amount: Number(row.subscription.amount) || 0,
       nextDue: row.subscription.nextDue,
     });
   }
@@ -120,7 +122,7 @@ export function MasterAssinaturasPage() {
         plan: draft.plan,
         cycle: draft.cycle,
         status: draft.status,
-        amount: Number(draft.amount.replace(",", ".")) || 0,
+        amount: draft.amount || 0,
         nextDue: draft.nextDue,
       });
       setNotice("Assinatura atualizada.");
@@ -235,6 +237,7 @@ export function MasterAssinaturasPage() {
                           <option value="pro">PODMEI Pro</option>
                           <option value="premium">PODMEI Premium</option>
                           <option value="contador">PODMEI Contador</option>
+                          <option value="contador_premium">PODMEI Contador Premium</option>
                         </select>
                       ) : (
                         plans[row.account.plan === "master" ? "pro" : row.account.plan]?.name ||
@@ -244,10 +247,11 @@ export function MasterAssinaturasPage() {
                     <td className="px-4 py-3">
                       {isEditing ? (
                         <div className="space-y-2">
-                          <input
+                          <MoneyBrInput
                             className="input text-sm"
                             value={draft.amount}
-                            onChange={(e) => setDraft({ ...draft, amount: e.target.value })}
+                            onChange={(amount) => setDraft({ ...draft, amount })}
+                            min={0}
                           />
                           <select
                             className="input text-sm"
@@ -266,14 +270,13 @@ export function MasterAssinaturasPage() {
                     </td>
                     <td className="px-4 py-3">
                       {isEditing ? (
-                        <input
+                        <DateBrInput
                           className="input text-sm"
-                          type="date"
-                          value={draft.nextDue}
-                          onChange={(e) => setDraft({ ...draft, nextDue: e.target.value })}
+                          value={draft.nextDue || ""}
+                          onChange={(nextDue) => setDraft({ ...draft, nextDue })}
                         />
                       ) : (
-                        sub?.nextDue || "—"
+                        sub?.nextDue ? formatDate(sub.nextDue) : "—"
                       )}
                     </td>
                     <td className="px-4 py-3">

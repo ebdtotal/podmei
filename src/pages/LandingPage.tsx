@@ -1,10 +1,12 @@
 import { Link } from "react-router-dom";
+import { type ReactNode } from "react";
 import {
   ArrowRight,
   Camera,
   FileText,
   Gauge,
   Lock,
+  Package,
   Receipt,
   Shield,
   ShieldCheck,
@@ -29,6 +31,11 @@ const features = [
     icon: Camera,
     title: "Áudio, texto e extrato",
     text: "Lance compra e venda por texto ou áudio, ou importe o PDF/Excel do banco.",
+  },
+  {
+    icon: Package,
+    title: "Controle de estoque",
+    text: "Entrada e saída nas compras e vendas, custo médio, margem e alerta de produtos em falta ou parados.",
   },
   {
     icon: Users,
@@ -82,7 +89,7 @@ const values = [
 const faqs = [
   {
     q: "Substitui o contador?",
-    a: "Não. O MEI usa o PODMEI Pro no dia a dia. O contador entra no PODMEI Contador, troca de CNPJ e acompanha limite, DAS e relatórios de todos os clientes.",
+    a: "Não. O MEI usa o PODMEI Pro ou Premium no dia a dia. O escritório entra no Contador ou Contador Premium, troca de CNPJ e acompanha os clientes. Contador Premium trata o próprio escritório como Simples Nacional, sem o teto de R$ 81 mil do MEI.",
   },
   {
     q: "Os dados ficam onde?",
@@ -139,8 +146,8 @@ export function LandingPage() {
         </div>
       </header>
 
-      <section className="mx-auto grid max-w-6xl items-center gap-12 px-4 py-16 md:grid-cols-2 md:py-24">
-        <div>
+      <section className="mx-auto grid max-w-6xl items-center gap-12 px-4 py-14 md:grid-cols-2 md:gap-10 md:py-20">
+        <div className="relative z-10">
           <h1 className="flex items-center gap-4 md:gap-5">
             <img
               src="/pod-mei-icon.png"
@@ -157,8 +164,8 @@ export function LandingPage() {
             </span>
           </h1>
           <p className="mt-5 max-w-xl text-lg text-mute">
-            Cadastre a empresa, acompanhe o limite de faturamento, importe o extrato do banco e tire DRE, livro-caixa
-            e a declaração anual — no formato que o fisco espera.
+            Cadastre a empresa, controle estoque e margem, acompanhe o limite de faturamento, importe o extrato do banco
+            e tire DRE, livro-caixa e a declaração anual — no formato que o fisco espera.
           </p>
           <div className="mt-8 flex flex-wrap gap-3">
             {canPurchase ? (
@@ -173,7 +180,9 @@ export function LandingPage() {
             </Link>
           </div>
         </div>
-        <HeroCard />
+        <div className="relative min-h-[340px] pb-8 sm:min-h-[380px] md:min-h-[420px] md:pb-4">
+          <HeroShowcase />
+        </div>
       </section>
 
       <section id="produto" className="border-y border-line bg-paper py-16">
@@ -218,13 +227,13 @@ export function LandingPage() {
           <h2 className="font-display text-4xl text-ink">Pacotes de acesso</h2>
           <p className="mt-2 text-mute">
             {isIosApp()
-              ? "Pro, Premium e Contador. Assinatura pela App Store neste app."
+              ? "Pro, Premium, Contador e Contador Premium. Assinatura pela App Store neste app."
               : canPurchase
-                ? "Pro para o essencial. Premium para caixa e visão completa. Contador para o escritório."
-                : "Pro, Premium e Contador."}
+                ? "Pro para o essencial. Premium para o MEI. Contador e Contador Premium para o escritório."
+                : "Pro, Premium, Contador e Contador Premium."}
           </p>
         </div>
-        <div className="mt-8 grid gap-4 lg:grid-cols-3">
+        <div className="mt-8 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
           {PLAN_KEYS.map((key) => {
             const p = plans[key];
             return (
@@ -288,25 +297,170 @@ export function LandingPage() {
   );
 }
 
-function HeroCard() {
+function HeroShowcase() {
   return (
-    <div className="rounded-3xl p-6 text-white shadow-lg" style={{ background: "linear-gradient(135deg, #7B2CF5, #2563EB)" }}>
-      <p className="text-xs font-semibold text-white/80">Limite MEI 2026</p>
-      <p className="mt-2 font-display text-3xl">63,07% usado</p>
-      <p className="mt-1 text-sm text-white/70">R$ 51.090,51 de R$ 81.000,00</p>
-      <div className="mt-4 h-2 rounded-full bg-white/15">
-        <div className="h-2 w-[63%] rounded-full bg-green" />
+    <div
+      className="relative mx-auto w-full max-w-xl select-none md:max-w-none"
+      aria-label="Prévia do sistema PODMEI"
+    >
+      <div
+        className="pointer-events-none absolute -inset-6 rounded-[2rem] opacity-70 blur-2xl md:-inset-8"
+        style={{ background: "linear-gradient(135deg, rgba(123,44,245,0.18), rgba(34,197,94,0.16))" }}
+        aria-hidden
+      />
+
+      {/* Print secundário: estoque */}
+      <div className="absolute -right-1 top-6 z-0 w-[72%] rotate-[5deg] scale-[0.92] opacity-95 shadow-xl transition duration-500 md:-right-3 md:top-4 md:w-[78%]">
+        <UiFrame title="Produtos e serviços">
+          <div className="space-y-2 p-3 text-[10px] leading-snug text-slate-700 sm:text-[11px]">
+            <div className="grid grid-cols-3 gap-1.5">
+              <MiniStat label="Produtos" value="12" />
+              <MiniStat label="Em alerta" value="2" tone="orange" />
+              <MiniStat label="Valor estoque" value="R$ 4.280" />
+            </div>
+            <div className="overflow-hidden rounded-lg border border-slate-200">
+              <div className="grid grid-cols-[1.4fr_0.7fr_0.8fr] bg-[#7B2CF5] px-2 py-1 text-[9px] font-semibold text-white">
+                <span>Item</span>
+                <span>Estoque</span>
+                <span>Margem</span>
+              </div>
+              <RowProd nome="Camiseta básica" est="25 un" margem="R$ 22,40" />
+              <RowProd nome="Caneca personalizada" est="3 un · baixo" margem="R$ 14,10" alert />
+              <RowProd nome="Kit adesivos" est="40 un" margem="R$ 8,90" />
+            </div>
+          </div>
+        </UiFrame>
       </div>
-      <div className="mt-6 grid grid-cols-2 gap-3 text-sm">
-        <div className="rounded-xl bg-white/10 p-3">
-          <p className="text-white/60">Serviços no mês</p>
-          <p className="mt-1 font-semibold">R$ 8.431,00</p>
-        </div>
-        <div className="rounded-xl bg-green p-3">
-          <p className="text-white/80">Status</p>
-          <p className="mt-1 font-semibold">Dentro do limite</p>
-        </div>
+
+      {/* Print principal: painel */}
+      <div className="relative z-10 w-[88%] -rotate-[2deg] shadow-2xl transition duration-500 hover:rotate-0">
+        <UiFrame title="Painel do MEI" wide>
+          <div className="space-y-2.5 p-3 text-[10px] leading-snug text-slate-700 sm:p-4 sm:text-[11px]">
+            <div>
+              <p className="text-[9px] font-semibold uppercase tracking-wide text-slate-400">Painel do MEI</p>
+              <p className="font-display text-sm font-bold text-slate-900 sm:text-base">Minha Empresa MEI</p>
+              <p className="text-[10px] text-slate-500">00.000.000/0001-00 · Cidade/UF</p>
+            </div>
+            <div className="rounded-lg bg-[#7B2CF5] p-2.5 text-white sm:p-3">
+              <p className="text-[9px] text-white/75">Limite MEI 2026</p>
+              <p className="font-display text-lg font-bold sm:text-xl">58%</p>
+              <div className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-white/20">
+                <div className="h-full w-[58%] rounded-full bg-[#22C55E]" />
+              </div>
+              <p className="mt-1 text-[10px] text-white/80">R$ 46.980 de R$ 81.000 · dentro do limite</p>
+            </div>
+            <div className="grid grid-cols-2 gap-1.5">
+              <MiniStat label="Receita do mês" value="R$ 8.430" />
+              <MiniStat label="Resultado" value="R$ 5.100" tone="green" />
+            </div>
+            <div className="rounded-lg border border-slate-200 bg-slate-50 px-2.5 py-2">
+              <p className="text-[9px] font-semibold text-slate-500">Próximos avisos</p>
+              <p className="mt-0.5 text-[10px]">DAS do mês · vencimento dia 20</p>
+              <p className="text-[10px] text-amber-700">2 produtos com estoque baixo</p>
+            </div>
+          </div>
+        </UiFrame>
       </div>
+
+      {/* Print terciário: margem na venda */}
+      <div className="absolute -bottom-2 left-0 z-20 w-[64%] rotate-[-4deg] shadow-xl transition duration-500 md:-bottom-4 md:left-2 md:w-[58%]">
+        <UiFrame title="Lançamentos">
+          <div className="space-y-2 p-3 text-[10px] leading-snug text-slate-700 sm:text-[11px]">
+            <p className="font-semibold text-slate-900">Venda · comércio</p>
+            <p className="text-slate-500">Produto demo · qtd 2 · R$ 49,90</p>
+            <div className="rounded-lg border border-slate-200 bg-slate-50 px-2 py-1.5">
+              <p className="text-[9px] font-semibold uppercase tracking-wide text-slate-500">Margem da venda</p>
+              <p className="mt-0.5">CMV R$ 27,50/un · margem R$ 44,80</p>
+              <p className="font-semibold text-[#7B2CF5]">Máx. desconto sem prejuízo: R$ 44,80 (45%)</p>
+            </div>
+          </div>
+        </UiFrame>
+      </div>
+    </div>
+  );
+}
+
+function UiFrame({
+  title,
+  children,
+  wide,
+}: {
+  title: string;
+  children: ReactNode;
+  wide?: boolean;
+}) {
+  return (
+    <div
+      className={cn(
+        "overflow-hidden rounded-2xl border border-slate-200/90 bg-white shadow-[0_18px_50px_rgba(15,23,42,0.14)]",
+        wide ? "min-h-[240px]" : "",
+      )}
+    >
+      <div className="flex items-center gap-1.5 border-b border-slate-100 bg-slate-50 px-3 py-2">
+        <span className="size-2 rounded-full bg-red-500" />
+        <span className="size-2 rounded-full bg-amber-500" />
+        <span className="size-2 rounded-full bg-green-500" />
+        <span className="ml-2 truncate text-[10px] font-medium text-slate-500">{title}</span>
+      </div>
+      <div className="flex">
+        <div className="hidden w-14 shrink-0 border-r border-slate-100 bg-[#f8fafc] p-2 sm:block">
+          <div className="mb-2 size-5 rounded" style={{ background: "linear-gradient(135deg, #7B2CF5, #22C55E)" }} />
+          <div className="space-y-1.5">
+            {[1, 2, 3, 4, 5].map((i) => (
+              <div
+                key={i}
+                className={cn("h-1.5 rounded", i === 1 ? "bg-violet-500" : "bg-slate-200")}
+              />
+            ))}
+          </div>
+        </div>
+        <div className="min-w-0 flex-1">{children}</div>
+      </div>
+    </div>
+  );
+}
+
+function MiniStat({
+  label,
+  value,
+  tone,
+}: {
+  label: string;
+  value: string;
+  tone?: "green" | "orange";
+}) {
+  return (
+    <div className="rounded-lg border border-slate-200 bg-white px-2 py-1.5">
+      <p className="text-[9px] uppercase tracking-wide text-slate-400">{label}</p>
+      <p
+        className={cn(
+          "mt-0.5 font-semibold text-slate-900",
+          tone === "green" && "text-[#16a34a]",
+          tone === "orange" && "text-[#ea580c]",
+        )}
+      >
+        {value}
+      </p>
+    </div>
+  );
+}
+
+function RowProd({
+  nome,
+  est,
+  margem,
+  alert,
+}: {
+  nome: string;
+  est: string;
+  margem: string;
+  alert?: boolean;
+}) {
+  return (
+    <div className="grid grid-cols-[1.4fr_0.7fr_0.8fr] border-t border-slate-100 px-2 py-1.5">
+      <span className="truncate font-medium">{nome}</span>
+      <span className={cn(alert && "font-semibold text-amber-700")}>{est}</span>
+      <span>{margem}</span>
     </div>
   );
 }

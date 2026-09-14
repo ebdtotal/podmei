@@ -139,7 +139,7 @@ async function activate(store: StoreFile, lead: Lead): Promise<ConfirmPaymentRes
     username,
     email: lead.email,
     nome: lead.nome,
-    role: lead.plan === "contador" ? "contador" : "pro",
+    role: lead.plan === "contador" || lead.plan === "contador_premium" ? "contador" : "pro",
     plan: lead.plan,
     status: "ativo",
     mustChangePassword: false,
@@ -305,7 +305,7 @@ export const localPlatform = {
       const user = store.users.find((u) => u.id === sub.userId);
       if (user && user.role !== "master") {
         user.plan = patch.plan;
-        user.role = patch.plan === "contador" ? "contador" : "pro";
+        user.role = patch.plan === "contador" || patch.plan === "contador_premium" ? "contador" : "pro";
       }
     }
     if (patch.cycle) sub.cycle = patch.cycle;

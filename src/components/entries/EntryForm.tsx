@@ -16,8 +16,9 @@ import type {
   RevenueKind,
 } from "@/lib/types";
 import { matchContact, parseLancamento, recurringDueDates, type PagamentoModo, type ParsedDraft } from "@/lib/parser";
+import { stockLevel } from "@/lib/stock";
 import { useStore } from "@/lib/store";
-import { addMonthsOnDay, dueOnDayFrom, formatDate, formatMoney, todayIso } from "@/lib/utils";
+import { addMonthsOnDay, cn, dueOnDayFrom, formatDate, formatMoney, todayIso } from "@/lib/utils";
 
 const emptyDraft = (): ParsedDraft => ({
   kind: "venda",
@@ -240,6 +241,35 @@ export function EntryForm({
   const defaultContactKind = draft.kind === "venda" ? "cliente" : "fornecedor";
   const defaultProductKind: ProductKind =
     draft.kind === "venda" && draft.revenueKind === "servico" ? "servico" : "produto";
+  const selectedProduct = draft.productId ? products.find((p) => p.id === draft.productId) : undefined;
+  const qty = draft.quantidade && draft.quantidade > 0 ? draft.quantidade : 1;
+  const estoqueAtual = selectedProduct?.kind === "produto" ? Number(selectedProduct.estoqueAtual) || 0 : null;
+  const custoMedio = selectedProduct?.kind === "produto" ? Number(selectedProduct.custoMedio) || 0 : 0;
+  const unitPrice = draft.precoUnitario || selectedProduct?.preco || 0;
+  const stockHint =
+    selectedProduct?.kind === "produto" && (draft.kind === "venda" || draft.kind === "compra")
+      ? draft.kind === "venda"
+        ? qty > estoqueAtual!
+          ? `Estoque atual: ${estoqueAtual} ${selectedProduct.unidade || "un"} — a venda deixa o saldo negativo (aviso, não bloqueia).`
+          : `Estoque atual: ${estoqueAtual} ${selectedProduct.unidade || "un"}${stockLevel(selectedProduct) === "baixo" ? " · abaixo do mínimo" : ""}.`
+        : `Estoque atual: ${estoqueAtual} ${selectedProduct.unidade || "un"} — a compra soma a quantidade e atualiza o custo médio${
+            unitPrice > 0 ? ` (custo unit. ${formatMoney(unitPrice)})` : ""
+          }.`
+      : null;
+
+  const marginInfo =
+    draft.kind === "venda" && selectedProduct?.kind === "produto" && custoMedio > 0 && totals.bruto > 0
+      ? (() => {
+          const round2 = (n: number) => Math.round(n * 100) / 100;
+          const custoTotal = round2(custoMedio * qty);
+          const margemBruta = round2(totals.bruto - custoTotal);
+          const margemApos = round2(totals.liquido - custoTotal);
+          const descontoMax = Math.max(0, margemBruta);
+          const descontoMaxPct = round2((descontoMax / totals.bruto) * 100);
+          const abaixoCusto = margemApos < 0;
+          return { custoMedio, custoTotal, margemBruta, margemApos, descontoMax, descontoMaxPct, abaixoCusto };
+        })()
+      : null;
 
   return (
     <>
@@ -374,7 +404,12 @@ export function EntryForm({
           <option value="">Avulso / digitar descrição</option>
           {catalog.map((p) => (
             <option key={p.id} value={p.id}>
-              {p.kind === "servico" ? "Serviço" : "Produto"} · {p.nome} ({formatMoney(p.preco)})
+              {p.kind === "servico" ? "Serviço" : "Produto"} · {p.nome} ({formatMoney(p.preco)}
+              {p.kind === "produto" ? ` · est. ${Number(p.estoqueAtual) || 0}` : ""}
+              {p.kind === "produto" && Number(p.custoMedio) > 0
+                ? ` · CMV ${formatMoney(Number(p.custoMedio))}`
+                : ""}
+              )
             </option>
           ))}
         </select>
@@ -398,6 +433,9 @@ export function EntryForm({
           className="input"
         />
       </Field>
+      {stockHint ? (
+        <p className="sm:col-span-2 md:col-span-3 -mt-1 text-xs text-mute">{stockHint}</p>
+      ) : null}
       <Field label="Valor unitário">
         <MoneyBrInput
           autoFocus={autoFocusValor && !(draft.precoUnitario || draft.valor)}
@@ -446,6 +484,14 @@ export function EntryForm({
             />
           )}
         </div>
+        {marginInfo ? (
+          <p className="mt-1.5 text-[11px] text-mute">
+            Desconto máximo sem prejuízo:{" "}
+            <strong className="text-ink">
+              {formatMoney(marginInfo.descontoMax)} ({marginInfo.descontoMaxPct}%)
+            </strong>
+          </p>
+        ) : null}
       </Field>
       <Field label="Documento">
         <input
@@ -644,6 +690,48 @@ export function EntryForm({
           {" = "}
           <strong className="text-ink">líquido {formatMoney(totals.liquido)}</strong>
         </p>
+        {marginInfo ? (
+          <div
+            className={cn(
+              "mt-2 rounded-xl border px-3 py-2 text-xs",
+              marginInfo.abaixoCusto
+                ? "border-red/40 bg-red/10 text-red"
+                : "border-line bg-paper text-ink",
+            )}
+          >
+            <p className="font-semibold">
+              Margem da venda
+              {marginInfo.abaixoCusto ? " — abaixo do custo" : ""}
+            </p>
+            <p className="mt-1 text-mute">
+              CMV {formatMoney(marginInfo.custoMedio)}/un · custo total {formatMoney(marginInfo.custoTotal)}
+            </p>
+            <p className="mt-1">
+              Margem bruta {formatMoney(marginInfo.margemBruta)}
+              {totals.desconto > 0 ? (
+                <>
+                  {" → "}
+                  <strong>após desconto {formatMoney(marginInfo.margemApos)}</strong>
+                </>
+              ) : (
+                <>
+                  {" · "}
+                  <strong>{formatMoney(marginInfo.margemApos)}</strong>
+                </>
+              )}
+            </p>
+            <p className={cn("mt-1", marginInfo.abaixoCusto ? "text-red" : "text-mute")}>
+              Máx. desconto sem prejuízo:{" "}
+              <strong className={marginInfo.abaixoCusto ? "text-red" : "text-ink"}>
+                {formatMoney(marginInfo.descontoMax)} ({marginInfo.descontoMaxPct}%)
+              </strong>
+            </p>
+          </div>
+        ) : draft.kind === "venda" && selectedProduct?.kind === "produto" && !(Number(selectedProduct.custoMedio) > 0) ? (
+          <p className="mt-2 text-xs text-mute">
+            Cadastre o custo (compra ou custo médio no produto) para ver a margem e o desconto máximo.
+          </p>
+        ) : null}
       </div>
 
       <label className="flex min-h-11 items-center gap-3 text-sm sm:col-span-2 md:col-span-3">

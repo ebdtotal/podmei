@@ -59,7 +59,7 @@ export function ConvitePage() {
           <button type="button" className="btn-primary mt-6 w-full" disabled={busy} onClick={() => void accept()}>
             Abrir na carteira
           </button>
-        ) : user?.plan === "contador" || user?.role === "master" ? (
+        ) : user?.plan === "contador" || user?.plan === "contador_premium" || user?.role === "master" ? (
           <button type="button" className="btn-primary mt-6 w-full" disabled={busy || !token} onClick={() => void accept()}>
             {busy ? "Aceitando…" : "Aceitar e abrir o MEI"}
           </button>

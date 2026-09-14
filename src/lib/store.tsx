@@ -1,11 +1,11 @@
 import { createContext, useContext, useMemo, useState, type ReactNode } from "react";
-import type { Accountant, AppState, CalendarEvent, Company, Contact, Employee, Entry, Investment, InvestmentMovement, MeiClient, PayrollRun, PlanKey, Product, WhatsAppMessage, Workspace } from "./types";
+import type { Accountant, AppState, CalendarEvent, Company, Contact, Employee, Entry, Investment, InvestmentMovement, MeiClient, PayrollRun, PlanKey, Product, StockMovement, WhatsAppMessage, Workspace } from "./types";
 import { normalizePlan } from "./plans";
 import { demoAccountant, demoClients, welcomeWhatsapp } from "./seed";
+import { applyEntriesStockFull, applyEntryStockFull, applyOpeningStock, applyStockAdjust } from "./stock";
 import { todayIso, uid } from "./utils";
-
-const STORAGE_V1 = "mei-em-ordem-v1";
 const STORAGE_KEY = "mei-em-ordem-v2";
+const STORAGE_V1 = "mei-em-ordem-v1";
 const DEMO_CLIENT_IDS = new Set(["mei_amanda", "mei_joao", "mei_maria"]);
 
 /** Cache local por conta — a fonte da verdade online é o SQLite (sync-workspace). */
@@ -81,12 +81,14 @@ export function createMeiClient(patch?: ClientDraft): MeiClient {
     whatsapp: welcomeWhatsapp(),
     whatsappPhone: "",
     employee: null,
+    employees: [],
     payrolls: [],
     contacts: [],
     products: [],
     events: [],
     investments: [],
     investmentMovements: [],
+    stockMovements: [],
     ...rest,
     company: { ...emptyCompany(), ...company },
   };
@@ -103,7 +105,17 @@ function defaultWorkspace(): Workspace {
 
 /** Workspace limpo para contas reais (nunca demo Amanda/João). */
 export function emptyWorkspace(plan: PlanKey = "pro"): Workspace {
-  const client = createMeiClient({ plan });
+  const isSn = plan === "contador_premium";
+  const client = createMeiClient({
+    plan,
+    company: isSn
+      ? {
+          nome: "Escritório Contábil",
+          regimeTributario: "simples_nacional",
+          limiteFaturamento: 0,
+        }
+      : undefined,
+  });
   return stampWorkspace({
     accountant: {
       nome: "",
@@ -156,9 +168,17 @@ function hydrateClient(client: MeiClient): MeiClient {
     contacts: client.contacts ?? [],
     products: client.products ?? [],
     payrolls: client.payrolls ?? [],
+    employees:
+      client.employees && client.employees.length
+        ? client.employees
+        : client.employee
+          ? [client.employee]
+          : [],
+    employee: client.employee ?? (client.employees?.find((e) => e.status === "ativo") ?? null),
     events: client.events ?? [],
     investments: client.investments ?? [],
     investmentMovements: client.investmentMovements ?? [],
+    stockMovements: client.stockMovements ?? [],
     company: client.company,
   });
 }
@@ -257,12 +277,14 @@ interface StoreValue {
   whatsapp: WhatsAppMessage[];
   whatsappPhone: string;
   employee: Employee | null;
+  employees: Employee[];
   payrolls: PayrollRun[];
   contacts: Contact[];
   products: Product[];
   events: CalendarEvent[];
   investments: Investment[];
   investmentMovements: InvestmentMovement[];
+  stockMovements: StockMovement[];
   setAccountant: (accountant: Accountant) => void;
   setCompany: (company: Company) => void;
   addEntry: (entry: Entry) => void;
@@ -274,13 +296,21 @@ interface StoreValue {
   addWhatsapp: (msg: WhatsAppMessage) => void;
   setWhatsappPhone: (phone: string) => void;
   setEmployee: (employee: Employee | null) => void;
+  upsertEmployee: (employee: Employee) => void;
   upsertPayroll: (run: PayrollRun) => void;
   addContact: (contact: Omit<Contact, "id" | "createdAt"> & { id?: string; createdAt?: string }) => Contact;
   updateContact: (id: string, patch: Partial<Contact>) => void;
   removeContact: (id: string) => void;
-  addProduct: (product: Omit<Product, "id" | "createdAt"> & { id?: string; createdAt?: string }) => Product;
-  updateProduct: (id: string, patch: Partial<Product>) => void;
+  addProduct: (
+    product: Omit<Product, "id" | "createdAt"> & { id?: string; createdAt?: string; custoInicial?: number },
+  ) => Product;
+  updateProduct: (id: string, patch: Partial<Product> & { custoInicial?: number }) => void;
   removeProduct: (id: string) => void;
+  adjustStock: (
+    productId: string,
+    newQty: number,
+    opts?: { unitCost?: number; observacao?: string; data?: string },
+  ) => void;
   addEvent: (event: Omit<CalendarEvent, "id" | "createdAt"> & { id?: string; createdAt?: string }) => CalendarEvent;
   addEvents: (events: Array<Omit<CalendarEvent, "id" | "createdAt"> & { id?: string; createdAt?: string }>) => CalendarEvent[];
   updateEvent: (id: string, patch: Partial<CalendarEvent>) => void;
@@ -330,46 +360,79 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       whatsapp: active.whatsapp,
       whatsappPhone: active.whatsappPhone,
       employee: active.employee ?? null,
+      employees: active.employees?.length
+        ? active.employees
+        : active.employee
+          ? [active.employee]
+          : [],
       payrolls: active.payrolls ?? [],
       contacts: active.contacts ?? [],
       products: active.products ?? [],
       events: active.events ?? [],
       investments: active.investments ?? [],
       investmentMovements: active.investmentMovements ?? [],
+      stockMovements: active.stockMovements ?? [],
       setAccountant: (accountant) => commit((prev) => ({ ...prev, accountant })),
       setCompany: (company) => commit((prev) => patchActive(prev, { company })),
       addEntry: (entry) =>
         commit((prev) => {
           const cur = activeOf(prev);
+          const applied = applyEntryStockFull(cur.products ?? [], cur.stockMovements ?? [], entry, 1);
           return patchActive(prev, {
             entries: [...cur.entries, entry].sort((a, b) => a.data.localeCompare(b.data)),
+            products: applied.products,
+            stockMovements: applied.movements,
           });
         }),
       addEntries: (list) =>
         commit((prev) => {
           const cur = activeOf(prev);
+          const applied = applyEntriesStockFull(cur.products ?? [], cur.stockMovements ?? [], list, 1);
           return patchActive(prev, {
             entries: [...cur.entries, ...list].sort((a, b) => a.data.localeCompare(b.data)),
+            products: applied.products,
+            stockMovements: applied.movements,
           });
         }),
       updateEntry: (id, patch) =>
         commit((prev) => {
           const cur = activeOf(prev);
+          const old = cur.entries.find((e) => e.id === id);
+          if (!old) return prev;
+          const next = { ...old, ...patch };
+          const undone = applyEntryStockFull(cur.products ?? [], cur.stockMovements ?? [], old, -1);
+          const applied = applyEntryStockFull(undone.products, undone.movements, next, 1);
           return patchActive(prev, {
-            entries: cur.entries.map((e) => (e.id === id ? { ...e, ...patch } : e)),
+            entries: cur.entries.map((e) => (e.id === id ? next : e)),
+            products: applied.products,
+            stockMovements: applied.movements,
           });
         }),
       removeEntry: (id) =>
         commit((prev) => {
           const cur = activeOf(prev);
-          return patchActive(prev, { entries: cur.entries.filter((e) => e.id !== id) });
+          const old = cur.entries.find((e) => e.id === id);
+          const applied = old
+            ? applyEntryStockFull(cur.products ?? [], cur.stockMovements ?? [], old, -1)
+            : { products: cur.products ?? [], movements: cur.stockMovements ?? [] };
+          return patchActive(prev, {
+            entries: cur.entries.filter((e) => e.id !== id),
+            products: applied.products,
+            stockMovements: applied.movements,
+          });
         }),
       removeEntries: (ids) => {
         const set = new Set(ids);
         if (!set.size) return;
         commit((prev) => {
           const cur = activeOf(prev);
-          return patchActive(prev, { entries: cur.entries.filter((e) => !set.has(e.id)) });
+          const removed = cur.entries.filter((e) => set.has(e.id));
+          const applied = applyEntriesStockFull(cur.products ?? [], cur.stockMovements ?? [], removed, -1);
+          return patchActive(prev, {
+            entries: cur.entries.filter((e) => !set.has(e.id)),
+            products: applied.products,
+            stockMovements: applied.movements,
+          });
         });
       },
       setPlan: (plan) => commit((prev) => patchActive(prev, { plan })),
@@ -379,7 +442,39 @@ export function StoreProvider({ children }: { children: ReactNode }) {
           return patchActive(prev, { whatsapp: [...cur.whatsapp, msg] });
         }),
       setWhatsappPhone: (whatsappPhone) => commit((prev) => patchActive(prev, { whatsappPhone })),
-      setEmployee: (employee) => commit((prev) => patchActive(prev, { employee })),
+      setEmployee: (employee) =>
+        commit((prev) => {
+          const cur = activeOf(prev);
+          const list = cur.employees?.length
+            ? cur.employees
+            : cur.employee
+              ? [cur.employee]
+              : [];
+          let employees: Employee[];
+          if (!employee) {
+            employees = list.map((e) =>
+              e.status === "ativo" ? { ...e, status: "desligado" as const, dataDesligamento: todayIso() } : e,
+            );
+          } else {
+            const i = list.findIndex((e) => e.id === employee.id);
+            employees = i >= 0 ? list.map((e, idx) => (idx === i ? employee : e)) : [...list, employee];
+          }
+          const primary = employees.find((e) => e.status === "ativo") ?? null;
+          return patchActive(prev, { employee: primary, employees });
+        }),
+      upsertEmployee: (employee) =>
+        commit((prev) => {
+          const cur = activeOf(prev);
+          const list = cur.employees?.length
+            ? cur.employees
+            : cur.employee
+              ? [cur.employee]
+              : [];
+          const i = list.findIndex((e) => e.id === employee.id);
+          const employees = i >= 0 ? list.map((e, idx) => (idx === i ? employee : e)) : [...list, employee];
+          const primary = employees.find((e) => e.status === "ativo") ?? employee;
+          return patchActive(prev, { employee: primary.status === "ativo" ? primary : employees.find((e) => e.status === "ativo") ?? null, employees });
+        }),
       upsertPayroll: (run) =>
         commit((prev) => {
           const cur = activeOf(prev);
@@ -413,28 +508,111 @@ export function StoreProvider({ children }: { children: ReactNode }) {
           return patchActive(prev, { contacts: (cur.contacts ?? []).filter((c) => c.id !== id) });
         }),
       addProduct: (partial) => {
+        const { custoInicial, ...rest } = partial as typeof partial & { custoInicial?: number };
         const product: Product = {
-          ...partial,
-          id: partial.id || uid("prd"),
-          createdAt: partial.createdAt || todayIso(),
+          ...rest,
+          id: rest.id || uid("prd"),
+          createdAt: rest.createdAt || todayIso(),
+          estoqueAtual:
+            rest.kind === "produto"
+              ? rest.estoqueAtual != null
+                ? Number(rest.estoqueAtual) || 0
+                : 0
+              : undefined,
+          estoqueMinimo:
+            rest.kind === "produto" && rest.estoqueMinimo != null
+              ? Number(rest.estoqueMinimo) || 0
+              : undefined,
+          custoMedio:
+            rest.kind === "produto" && custoInicial != null && custoInicial >= 0
+              ? Number(custoInicial) || 0
+              : rest.kind === "produto"
+                ? rest.custoMedio
+                : undefined,
         };
         commit((prev) => {
           const cur = activeOf(prev);
-          return patchActive(prev, { products: [...(cur.products ?? []), product] });
+          const list = [...(cur.products ?? []), product];
+          if (product.kind !== "produto") {
+            return patchActive(prev, { products: list });
+          }
+          const opened = applyOpeningStock(list, cur.stockMovements ?? [], product, custoInicial);
+          return patchActive(prev, {
+            products: opened.products,
+            stockMovements: opened.movements,
+          });
         });
         return product;
       },
       updateProduct: (id, patch) =>
         commit((prev) => {
           const cur = activeOf(prev);
-          return patchActive(prev, {
-            products: (cur.products ?? []).map((p) => (p.id === id ? { ...p, ...patch } : p)),
+          const old = (cur.products ?? []).find((p) => p.id === id);
+          if (!old) return prev;
+          const { custoInicial, ...rest } = patch as typeof patch & { custoInicial?: number };
+          const merged: Product = { ...old, ...rest };
+          if (merged.kind === "servico") {
+            merged.estoqueAtual = undefined;
+            merged.estoqueMinimo = undefined;
+            merged.custoMedio = undefined;
+            return patchActive(prev, {
+              products: (cur.products ?? []).map((p) => (p.id === id ? merged : p)),
+              stockMovements: (cur.stockMovements ?? []).filter((m) => m.productId !== id),
+            });
+          }
+
+          let products = (cur.products ?? []).map((p) => (p.id === id ? { ...merged, estoqueAtual: old.estoqueAtual } : p));
+          let movements = cur.stockMovements ?? [];
+
+          const newQty = rest.estoqueAtual != null ? Number(rest.estoqueAtual) || 0 : Number(old.estoqueAtual) || 0;
+          const oldQty = Number(old.estoqueAtual) || 0;
+          if (newQty !== oldQty) {
+            const adjusted = applyStockAdjust(products, movements, id, newQty, {
+              unitCost: custoInicial,
+              observacao: "Ajuste manual no cadastro",
+            });
+            products = adjusted.products;
+            movements = adjusted.movements;
+          } else if (custoInicial != null && custoInicial >= 0) {
+            products = products.map((p) => (p.id === id ? { ...p, custoMedio: Number(custoInicial) || 0 } : p));
+          } else if (rest.custoMedio != null) {
+            products = products.map((p) =>
+              p.id === id ? { ...p, custoMedio: Number(rest.custoMedio) || 0 } : p,
+            );
+          }
+
+          // aplica demais campos (nome, preço, mínimo…)
+          products = products.map((p) => {
+            if (p.id !== id) return p;
+            return {
+              ...p,
+              nome: merged.nome,
+              preco: merged.preco,
+              unidade: merged.unidade,
+              observacao: merged.observacao,
+              estoqueMinimo: merged.estoqueMinimo,
+              kind: merged.kind,
+            };
           });
+
+          return patchActive(prev, { products, stockMovements: movements });
         }),
       removeProduct: (id) =>
         commit((prev) => {
           const cur = activeOf(prev);
-          return patchActive(prev, { products: (cur.products ?? []).filter((p) => p.id !== id) });
+          return patchActive(prev, {
+            products: (cur.products ?? []).filter((p) => p.id !== id),
+            stockMovements: (cur.stockMovements ?? []).filter((m) => m.productId !== id),
+          });
+        }),
+      adjustStock: (productId, newQty, opts) =>
+        commit((prev) => {
+          const cur = activeOf(prev);
+          const applied = applyStockAdjust(cur.products ?? [], cur.stockMovements ?? [], productId, newQty, opts);
+          return patchActive(prev, {
+            products: applied.products,
+            stockMovements: applied.movements,
+          });
         }),
       addEvent: (partial) => {
         const event: CalendarEvent = {

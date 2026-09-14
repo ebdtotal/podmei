@@ -2,14 +2,18 @@ import { Pencil, Plus, Repeat, X } from "lucide-react";
 import { useMemo, useState, type FormEvent } from "react";
 import { Link } from "react-router-dom";
 import { DateBrInput } from "@/components/ui/DateBrInput";
+import { MoneyBrInput } from "@/components/ui/MoneyBrInput";
 import { Modal } from "@/components/ui/Modal";
 import { useAuth } from "@/lib/auth";
 import { calendarItems, type CalendarItem } from "@/lib/cashflow";
-import { isPremiumPlan } from "@/lib/plans";
+import { nextBusinessDay } from "@/lib/das";
+import { hasPremiumAccess, isSimplesNacionalCompany } from "@/lib/plans";
 import { useStore } from "@/lib/store";
 import type { CalendarEvent } from "@/lib/types";
 import { MONTHS } from "@/lib/types";
-import { addDaysIso, cn, currentYear, formatDate, formatMoney, todayIso } from "@/lib/utils";
+import { addDaysIso, addMonthsOnDay, cn, currentYear, formatDate, formatMoney, isoDate, todayIso } from "@/lib/utils";
+
+type RepeatFreq = "semanal" | "mensal" | "anual";
 
 function kindLabel(kind: CalendarItem["kind"]) {
   if (kind === "receber") return "A receber";
@@ -25,31 +29,63 @@ function kindClass(kind: CalendarItem["kind"]) {
   return "border-navy/40 bg-navy/5";
 }
 
+function freqLabel(freq: RepeatFreq) {
+  if (freq === "semanal") return "semanal";
+  if (freq === "anual") return "anual";
+  return "mensal";
+}
+
+function toBusinessDayIso(iso: string) {
+  return isoDate(nextBusinessDay(new Date(`${iso.slice(0, 10)}T12:00:00`)));
+}
+
+/** Gera as datas da série. Com Dia útil + mensal, cada ocorrência vai para o próximo dia útil. */
+function buildRepeatDates(start: string, freq: RepeatFreq, times: number, diaUtil: boolean) {
+  const dayOfMonth = Number(start.slice(8, 10)) || 1;
+  const dates: string[] = [];
+  for (let i = 0; i < times; i++) {
+    let iso =
+      i === 0
+        ? start
+        : freq === "semanal"
+          ? addDaysIso(start, 7 * i)
+          : freq === "anual"
+            ? addMonthsOnDay(start, 12 * i, dayOfMonth)
+            : addMonthsOnDay(start, i, dayOfMonth);
+    if (diaUtil && freq === "mensal") iso = toBusinessDayIso(iso);
+    dates.push(iso);
+  }
+  return dates;
+}
+
 type EventForm = {
   id?: string;
   date: string;
   title: string;
   note: string;
-  valor: string;
+  valor: number;
   repeat: boolean;
-  everyDays: string;
+  freq: RepeatFreq;
   times: string;
+  diaUtil: boolean;
 };
 
 const emptyForm = (date: string): EventForm => ({
   date: date || todayIso(),
   title: "",
   note: "",
-  valor: "",
+  valor: 0,
   repeat: false,
-  everyDays: "30",
-  times: "10",
+  freq: "mensal",
+  times: "12",
+  diaUtil: false,
 });
 
 export function CalendarioPage() {
   const { user } = useAuth();
   const { company, entries, events, addEvent, addEvents, updateEvent, removeEvent } = useStore();
-  const isPremium = isPremiumPlan(user?.plan);
+  const isPremium = hasPremiumAccess(user);
+  const isSn = isSimplesNacionalCompany(company);
   const now = new Date();
   const [year, setYear] = useState(currentYear());
   const [month, setMonth] = useState(now.getMonth());
@@ -92,19 +128,18 @@ export function CalendarioPage() {
       date: ev.date,
       title: ev.title,
       note: ev.note || "",
-      valor: ev.valor != null && ev.valor > 0 ? String(ev.valor).replace(".", ",") : "",
+      valor: ev.valor != null && ev.valor > 0 ? ev.valor : 0,
       repeat: false,
-      everyDays: "30",
-      times: "10",
+      freq: "mensal",
+      times: "12",
+      diaUtil: false,
     });
   }
 
   function saveEvent(e: FormEvent) {
     e.preventDefault();
     if (!form?.title.trim() || !form.date) return;
-    const valorRaw = form.valor.trim().replace(/\./g, "").replace(",", ".");
-    const valorNum = valorRaw ? Number(valorRaw) : undefined;
-    const valor = valorNum != null && Number.isFinite(valorNum) && valorNum > 0 ? valorNum : undefined;
+    const valor = form.valor > 0 ? form.valor : undefined;
     const title = form.title.trim();
     const note = form.note.trim() || undefined;
 
@@ -115,38 +150,44 @@ export function CalendarioPage() {
       return;
     }
 
-    const everyDays = Math.max(1, Math.min(3650, Math.floor(Number(form.everyDays) || 0)));
     const times = Math.max(1, Math.min(120, Math.floor(Number(form.times) || 0)));
     const count = form.repeat ? times : 1;
+    const dates = form.repeat
+      ? buildRepeatDates(form.date, form.freq, count, form.diaUtil)
+      : [form.date];
 
-    const series: Array<Omit<CalendarEvent, "id" | "createdAt">> = [];
-    for (let i = 0; i < count; i++) {
-      const date = i === 0 ? form.date : addDaysIso(form.date, everyDays * i);
-      series.push({
-        date,
-        title: count > 1 ? `${title} (${i + 1}/${count})` : title,
-        note:
-          count > 1
-            ? [note, `Repetição: a cada ${everyDays} dia${everyDays === 1 ? "" : "s"}`].filter(Boolean).join(" · ")
-            : note,
-        valor,
-      });
-    }
+    const series: Array<Omit<CalendarEvent, "id" | "createdAt">> = dates.map((date, i) => ({
+      date,
+      title: count > 1 ? `${title} (${i + 1}/${count})` : title,
+      note:
+        count > 1
+          ? [
+              note,
+              `Repetição ${freqLabel(form.freq)}`,
+              form.diaUtil && form.freq === "mensal" ? "dia útil" : null,
+            ]
+              .filter(Boolean)
+              .join(" · ")
+          : note,
+      valor,
+    }));
     if (series.length === 1) addEvent(series[0]);
     else addEvents(series);
 
-    setSelected(form.date);
+    setSelected(dates[0] || form.date);
     setForm(null);
   }
 
   const repeatPreview =
     form && form.repeat && !form.id
       ? (() => {
-          const every = Math.max(1, Math.floor(Number(form.everyDays) || 0));
           const times = Math.max(1, Math.min(120, Math.floor(Number(form.times) || 0)));
-          if (!form.date || !every || !times) return null;
-          const last = addDaysIso(form.date, every * (times - 1));
-          return `Serão criados ${times} eventos: de ${formatDate(form.date)} até ${formatDate(last)}.`;
+          if (!form.date || !times) return null;
+          const dates = buildRepeatDates(form.date, form.freq, times, form.diaUtil);
+          const last = dates[dates.length - 1];
+          return `Serão criados ${times} eventos (${freqLabel(form.freq)}${
+            form.diaUtil && form.freq === "mensal" ? ", dia útil" : ""
+          }): de ${formatDate(dates[0])} até ${formatDate(last)}.`;
         })()
       : null;
 
@@ -156,8 +197,11 @@ export function CalendarioPage() {
         <div>
           <h1 className="font-display text-3xl text-ink">Calendário</h1>
           <p className="mt-1 text-sm text-mute">
-            Clique no dia para ver a receber, a pagar, o DAS e seus eventos. Verde = receber · laranja = pagar · roxo =
-            DAS · azul = evento.
+            Clique no dia para ver a receber, a pagar,{" "}
+            {isSn
+              ? "DAS do Simples, eSocial (até dia 15), DCTFWeb (último dia útil), FGTS (dia 20) e eventos"
+              : "o DAS e seus eventos"}
+            . Verde = receber · laranja = pagar · roxo = {isSn ? "obrigações" : "DAS"} · azul = evento.
             {isPremium ? " Premium: e-mail e aviso no celular às 06h no dia do evento." : null}
           </p>
         </div>
@@ -217,7 +261,12 @@ export function CalendarioPage() {
                   <div className="mt-1 flex flex-wrap gap-0.5">
                     {hasR ? <span className="size-1.5 rounded-full bg-green" title="A receber" /> : null}
                     {hasP ? <span className="size-1.5 rounded-full bg-orange" title="A pagar" /> : null}
-                    {hasDas ? <span className="size-1.5 rounded-full bg-navy" title="DAS mensal" /> : null}
+                    {hasDas ? (
+                      <span
+                        className="size-1.5 rounded-full bg-navy"
+                        title={isSn ? "Obrigação Simples / DAS" : "DAS mensal"}
+                      />
+                    ) : null}
                     {hasEvt ? <span className="size-1.5 rounded-full bg-blue" title="Evento" /> : null}
                   </div>
                   {list.length ? (
@@ -286,9 +335,15 @@ export function CalendarioPage() {
             <Link to="/app/contas" className="text-navy">
               Contas a receber / pagar
             </Link>
-            <Link to="/app/das" className="text-navy">
-              DAS mensal
-            </Link>
+            {isSn ? (
+              <Link to="/app/simples" className="text-navy">
+                Simples Nacional
+              </Link>
+            ) : (
+              <Link to="/app/das" className="text-navy">
+                DAS mensal
+              </Link>
+            )}
           </div>
         </section>
       </div>
@@ -321,12 +376,11 @@ export function CalendarioPage() {
             </label>
             <label className="block text-sm">
               <span className="text-mute">Valor (opcional)</span>
-              <input
+              <MoneyBrInput
                 className="input mt-1"
-                inputMode="decimal"
                 value={form.valor}
-                onChange={(e) => setForm({ ...form, valor: e.target.value })}
-                placeholder="0,00"
+                onChange={(valor) => setForm({ ...form, valor })}
+                min={0}
               />
             </label>
             <label className="block text-sm sm:col-span-2">
@@ -355,35 +409,68 @@ export function CalendarioPage() {
                   Repetição
                 </button>
                 {form.repeat ? (
-                  <div className="grid gap-3 rounded-2xl border border-line bg-bg/60 p-3 sm:grid-cols-2">
-                    <label className="block text-sm">
-                      <span className="text-mute">A cada quantos dias</span>
-                      <input
-                        className="input mt-1"
-                        type="number"
-                        min={1}
-                        max={3650}
-                        required
-                        value={form.everyDays}
-                        onChange={(e) => setForm({ ...form, everyDays: e.target.value })}
-                        placeholder="30"
-                      />
-                    </label>
-                    <label className="block text-sm">
-                      <span className="text-mute">Quantas vezes</span>
-                      <input
-                        className="input mt-1"
-                        type="number"
-                        min={1}
-                        max={120}
-                        required
-                        value={form.times}
-                        onChange={(e) => setForm({ ...form, times: e.target.value })}
-                        placeholder="10"
-                      />
-                    </label>
-                    <p className="text-xs text-mute sm:col-span-2">
-                      Ex.: a cada 30 dias por 10 vezes preenche 10 datas no calendário automaticamente.
+                  <div className="space-y-3 rounded-2xl border border-line bg-bg/60 p-3">
+                    <div>
+                      <p className="text-xs font-medium text-mute">Frequência</p>
+                      <div className="mt-2 flex flex-wrap gap-2">
+                        {(
+                          [
+                            ["semanal", "Semanal"],
+                            ["mensal", "Mensal"],
+                            ["anual", "Anual"],
+                          ] as const
+                        ).map(([value, label]) => (
+                          <button
+                            key={value}
+                            type="button"
+                            className={cn(
+                              "rounded-full border px-3 py-1.5 text-sm font-semibold transition",
+                              form.freq === value
+                                ? "border-navy bg-navy text-white"
+                                : "border-line bg-paper text-mute hover:border-navy/40 hover:text-ink",
+                            )}
+                            aria-pressed={form.freq === value}
+                            onClick={() => setForm({ ...form, freq: value })}
+                          >
+                            {label}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                    <div className="grid gap-3 sm:grid-cols-2">
+                      <label className="block text-sm">
+                        <span className="text-mute">Quantas vezes</span>
+                        <input
+                          className="input mt-1"
+                          type="number"
+                          min={1}
+                          max={120}
+                          required
+                          value={form.times}
+                          onChange={(e) => setForm({ ...form, times: e.target.value })}
+                          placeholder="12"
+                        />
+                      </label>
+                      <div className="flex items-end">
+                        <button
+                          type="button"
+                          className={cn(
+                            "inline-flex w-full items-center justify-center rounded-full border px-3 py-2.5 text-sm font-semibold transition",
+                            form.diaUtil
+                              ? "border-navy bg-navy/10 text-navy"
+                              : "border-line bg-paper text-mute hover:border-navy/40 hover:text-ink",
+                          )}
+                          aria-pressed={form.diaUtil}
+                          onClick={() => setForm({ ...form, diaUtil: !form.diaUtil })}
+                        >
+                          Dia útil
+                        </button>
+                      </div>
+                    </div>
+                    <p className="text-xs text-mute">
+                      {form.diaUtil && form.freq === "mensal"
+                        ? "Com Dia útil + Mensal, cada data cai no próximo dia útil (pula sábado, domingo e feriado nacional)."
+                        : "Escolha a frequência e quantas vezes o evento deve se repetir."}
                       {repeatPreview ? (
                         <>
                           <br />

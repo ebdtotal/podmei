@@ -1,5 +1,5 @@
-import { useMemo, useState } from "react";
-import { ExternalLink, Printer, UserRound } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
+import { ExternalLink, Plus, Printer, UserRound } from "lucide-react";
 import { FolhaPrintSheet } from "@/components/folha/FolhaPrintSheet";
 import { HoleriteSheet } from "@/components/folha/HoleriteSheet";
 import { SALARIO_MINIMO } from "@/lib/das";
@@ -13,32 +13,59 @@ import {
   legalSalaryFloor,
   payrollKindLabel,
   payrollMap,
+  payrollMapKey,
   salaryDueDate,
   salaryExpense,
   salaryOutOfMeiRange,
 } from "@/lib/folha";
 import { GOV_LINKS } from "@/lib/mei";
+import { useAuth } from "@/lib/auth";
+import { isSimplesNacionalCompany } from "@/lib/plans";
 import { useStore } from "@/lib/store";
 import type { Employee, PayrollKind, PayrollRun } from "@/lib/types";
 import { MONTHS } from "@/lib/types";
+import { MoneyBrInput } from "@/components/ui/MoneyBrInput";
+import { DateBrInput } from "@/components/ui/DateBrInput";
 import { cn, currentYear, formatDate, formatMoney, todayIso, uid } from "@/lib/utils";
 
 export function FolhaPage() {
-  const { company, employee, payrolls, setEmployee, upsertPayroll, addEntry } = useStore();
+  const { user } = useAuth();
+  const { company, employee, employees, payrolls, setEmployee, upsertEmployee, upsertPayroll, addEntry } = useStore();
+  const multi = isSimplesNacionalCompany(company) || user?.plan === "contador_premium";
   const year = currentYear();
+  const activeList = useMemo(
+    () => (employees?.length ? employees : employee ? [employee] : []).filter((e) => e.status === "ativo"),
+    [employees, employee],
+  );
+  const [selectedId, setSelectedId] = useState<string>("");
+  const selected =
+    activeList.find((e) => e.id === selectedId) || activeList[0] || (hasActiveEmployee(employee) ? employee : null);
   const [kind, setKind] = useState<PayrollKind>("mensal");
   const [month, setMonth] = useState(() => new Date().getMonth());
   const [extras, setExtras] = useState(0);
-  const [editing, setEditing] = useState(!hasActiveEmployee(employee));
+  const [editing, setEditing] = useState(false);
+  const [adding, setAdding] = useState(false);
   const [notice, setNotice] = useState("");
   const today = todayIso();
   const map = useMemo(() => payrollMap(payrolls), [payrolls]);
-  const existing = employee ? map.get(`${kind}-${year}-${String(month + 1).padStart(2, "0")}`) : undefined;
-  const preview = hasActiveEmployee(employee) ? calcPayroll({ employee, year, month, kind, extras }) : null;
+
+  useEffect(() => {
+    if (selected && selectedId !== selected.id) setSelectedId(selected.id);
+  }, [selected, selectedId]);
+
+  useEffect(() => {
+    if (!multi && !hasActiveEmployee(employee)) setEditing(true);
+  }, [multi, employee]);
+
+  const existing = selected
+    ? map.get(payrollMapKey(selected.id, year, month, kind))
+    : undefined;
+  const preview = hasActiveEmployee(selected) ? calcPayroll({ employee: selected, year, month, kind, extras }) : null;
   const display = existing && extras === existing.extras ? existing : preview;
   const salaryDue = salaryDueDate(year, month);
   const daeDue = daeDueDate(year, month);
-  const range = hasActiveEmployee(employee) ? salaryOutOfMeiRange(employee) : null;
+  const range =
+    hasActiveEmployee(selected) && !multi ? salaryOutOfMeiRange(selected) : null;
 
   function saveRun(next: PayrollRun, message: string) {
     upsertPayroll(next);
@@ -46,13 +73,13 @@ export function FolhaPage() {
   }
 
   function generate() {
-    if (!hasActiveEmployee(employee) || !preview) return;
+    if (!hasActiveEmployee(selected) || !preview) return;
     const next = buildPayroll({
-      employee,
+      employee: selected,
       year,
       month,
       kind,
-                    extras: extras,
+      extras,
       existing,
     });
     saveRun(next, `${payrollKindLabel[kind]} de ${MONTHS[month]} pronta para conferência.`);
@@ -72,22 +99,37 @@ export function FolhaPage() {
     saveRun({ ...existing, daePaid: true, daeEntryId: entry.id }, "DAE lançado como despesa. A guia oficial sai só no eSocial.");
   }
 
+  const emptyState = !hasActiveEmployee(selected) && activeList.length === 0;
+
   return (
     <div className="space-y-6">
       <div className="no-print flex flex-wrap items-end justify-between gap-3">
         <div>
-          <h1 className="font-display text-3xl text-ink">Folha do colaborador</h1>
+          <h1 className="font-display text-3xl text-ink">{multi ? "Folha de colaboradores" : "Folha do colaborador"}</h1>
           <p className="mt-1 max-w-2xl text-sm text-mute">
-            O MEI pode ter no máximo um empregado, no salário mínimo ou no piso da categoria. Aqui você calcula o
-            holerite 2026, provisiona 13º e férias e lança o pagamento no livro-caixa. A guia DAE sai no eSocial Web
-            MEI.
+            {multi
+              ? "Escritório no Simples Nacional: cadastre quantos colaboradores precisar. Calcule holerite, provisione 13º e férias e lance o pagamento."
+              : "O MEI pode ter no máximo um empregado, no salário mínimo ou no piso da categoria. Aqui você calcula o holerite 2026, provisiona 13º e férias e lança o pagamento no livro-caixa. A guia DAE sai no eSocial Web MEI."}
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
+          {multi ? (
+            <button
+              type="button"
+              className="btn-primary gap-2"
+              onClick={() => {
+                setAdding(true);
+                setEditing(false);
+              }}
+            >
+              <Plus className="size-4" />
+              Novo colaborador
+            </button>
+          ) : null}
           <button
             type="button"
             className="btn-ghost gap-2 disabled:opacity-50"
-            disabled={!display || !employee}
+            disabled={!display || !selected}
             onClick={() => void printOrSharePdf("folha-pagamento.pdf", ".print-sheet")}
           >
             <Printer className="size-4" />
@@ -96,14 +138,14 @@ export function FolhaPage() {
           <button
             type="button"
             className="btn-ghost gap-2 disabled:opacity-50"
-            disabled={!display || !employee}
+            disabled={!display || !selected}
             onClick={() => void printOrSharePdf("holerite.pdf", ".print-holerite")}
           >
             <Printer className="size-4" />
             Holerite
           </button>
           <a href={GOV_LINKS.esocialFolha} target="_blank" rel="noreferrer" className="btn-primary gap-2">
-            Abrir eSocial MEI
+            Abrir eSocial
             <ExternalLink className="size-4" />
           </a>
         </div>
@@ -111,30 +153,61 @@ export function FolhaPage() {
 
       {notice ? <p className="no-print rounded-xl border border-gold bg-paper px-4 py-3 text-sm">{notice}</p> : null}
 
-      {!hasActiveEmployee(employee) ? (
+      {multi && activeList.length > 0 ? (
+        <div className="no-print flex flex-wrap gap-2">
+          {activeList.map((e) => (
+            <button
+              key={e.id}
+              type="button"
+              className={selected?.id === e.id ? "btn-primary" : "btn-ghost"}
+              onClick={() => {
+                setSelectedId(e.id);
+                setAdding(false);
+                setEditing(false);
+              }}
+            >
+              {e.nome}
+            </button>
+          ))}
+        </div>
+      ) : null}
+
+      {adding ? (
+        <section className="no-print rounded-2xl border border-line bg-paper p-5">
+          <h2 className="font-semibold">Novo colaborador</h2>
+          <EmployeeForm
+            key="novo-multi"
+            initial={emptyEmployee()}
+            allowAnySalary={multi}
+            onSave={(next) => {
+              upsertEmployee(next);
+              setSelectedId(next.id);
+              setAdding(false);
+              setNotice(`${next.nome} cadastrado.`);
+            }}
+            onCancel={() => setAdding(false)}
+          />
+        </section>
+      ) : null}
+
+      {emptyState && !adding ? (
         <section className="no-print rounded-2xl border border-line bg-paper p-5">
           <div className="flex items-start gap-3">
             <span className="grid size-10 place-items-center rounded-xl bg-navy text-gold">
               <UserRound className="size-5" />
             </span>
             <div>
-              <h2 className="font-semibold">Este MEI ainda não tem colaborador</h2>
+              <h2 className="font-semibold">
+                {multi ? "Nenhum colaborador cadastrado" : "Este MEI ainda não tem colaborador"}
+              </h2>
               <p className="mt-1 text-sm text-mute">
-                Sem empregado, não há folha nem eSocial. Cadastre o único colaborador permitido. Depois da admissão
-                formal no eSocial, use esta tela todo mês.
+                {multi
+                  ? "Cadastre a equipe do escritório. Não há limite de colaboradores no Contador Premium."
+                  : "Sem empregado, não há folha nem eSocial. Cadastre o único colaborador permitido. Depois da admissão formal no eSocial, use esta tela todo mês."}
               </p>
-              <a
-                href={GOV_LINKS.esocialAdmissao}
-                target="_blank"
-                rel="noreferrer"
-                className="mt-2 inline-flex text-sm font-semibold text-ink"
-              >
-                Admitir no eSocial Web MEI
-                <ExternalLink className="ml-1 size-3.5" />
-              </a>
             </div>
           </div>
-          {employee && employee.status === "desligado" ? (
+          {!multi && employee && employee.status === "desligado" ? (
             <p className="mt-4 rounded-lg bg-bg px-3 py-2 text-sm">
               Último colaborador: {employee.nome}, desligado em {formatDate(employee.dataDesligamento || today)}.
               Você pode admitir outro — o MEI continua limitado a um por vez.
@@ -143,27 +216,30 @@ export function FolhaPage() {
           <EmployeeForm
             key={employee?.id ?? "novo"}
             initial={employee && employee.status === "desligado" ? emptyEmployee() : (employee ?? emptyEmployee())}
+            allowAnySalary={multi}
             onSave={(next) => {
-              setEmployee(next);
+              if (multi) upsertEmployee(next);
+              else setEmployee(next);
+              setSelectedId(next.id);
               setEditing(false);
-              setNotice(`${next.nome} cadastrado. Gere a folha do mês e feche no eSocial.`);
+              setNotice(`${next.nome} cadastrado.`);
             }}
           />
         </section>
-      ) : (
+      ) : hasActiveEmployee(selected) && !adding ? (
         <>
           <section className="no-print rounded-2xl border border-line bg-paper p-5">
             <div className="flex flex-wrap items-start justify-between gap-3">
               <div>
                 <p className="text-xs font-semibold uppercase tracking-wide text-mute">Colaborador de {company.nome}</p>
-                <h2 className="mt-1 font-display text-2xl text-ink">{employee.nome}</h2>
+                <h2 className="mt-1 font-display text-2xl text-ink">{selected.nome}</h2>
                 <p className="text-sm text-mute">
-                  {employee.cargo} · CPF {employee.cpf} · admitido em {formatDate(employee.dataAdmissao)} ·{" "}
-                  {employee.jornada === "44h" ? "44h semanais" : "jornada parcial"}
+                  {selected.cargo} · CPF {selected.cpf} · admitido em {formatDate(selected.dataAdmissao)} ·{" "}
+                  {selected.jornada === "44h" ? "44h semanais" : "jornada parcial"}
                 </p>
                 <p className="mt-2 text-sm">
-                  Salário {formatMoney(employee.salario)}
-                  {employee.valeTransporte ? ` · vale-transporte ${formatMoney(employee.valeTransporte)}` : ""}
+                  Salário {formatMoney(selected.salario)}
+                  {selected.valeTransporte ? ` · vale-transporte ${formatMoney(selected.valeTransporte)}` : ""}
                 </p>
               </div>
               <div className="flex gap-2">
@@ -174,10 +250,12 @@ export function FolhaPage() {
                   type="button"
                   className="btn-ghost text-red"
                   onClick={() => {
-                    if (!confirm(`Desligar ${employee.nome}? O MEI fica sem colaborador até uma nova admissão.`)) return;
-                    setEmployee({ ...employee, status: "desligado", dataDesligamento: today });
-                    setEditing(true);
-                    setNotice("Colaborador desligado. Faça a rescisão oficial no eSocial.");
+                    if (!confirm(`Desligar ${selected.nome}?`)) return;
+                    const next = { ...selected, status: "desligado" as const, dataDesligamento: today };
+                    if (multi) upsertEmployee(next);
+                    else setEmployee(next);
+                    setEditing(!multi);
+                    setNotice("Colaborador desligado.");
                   }}
                 >
                   Desligar
@@ -187,21 +265,24 @@ export function FolhaPage() {
             {range ? (
               <p className="mt-3 rounded-lg bg-orange/10 px-3 py-2 text-sm text-orange">
                 {range === "abaixo"
-                  ? `O salário está abaixo do mínimo legal deste caso (${formatMoney(legalSalaryFloor(employee))}).`
-                  : `MEI só pode pagar até o salário mínimo ou o piso da categoria (${formatMoney(legalSalaryFloor(employee))}). Valor maior pode desenquadrar.`}
+                  ? `O salário está abaixo do mínimo legal deste caso (${formatMoney(legalSalaryFloor(selected))}).`
+                  : `MEI só pode pagar até o salário mínimo ou o piso da categoria (${formatMoney(legalSalaryFloor(selected))}). Valor maior pode desenquadrar.`}
               </p>
             ) : (
               <p className="mt-3 text-xs text-mute">
-                Piso aplicado: {formatMoney(legalSalaryFloor(employee))} (maior entre o salário mínimo nacional e o
-                piso da categoria).
+                {multi
+                  ? "No Simples Nacional não há teto de salário mínimo do MEI."
+                  : `Piso aplicado: ${formatMoney(legalSalaryFloor(selected))} (maior entre o salário mínimo nacional e o piso da categoria).`}
               </p>
             )}
             {editing ? (
               <EmployeeForm
-                key={employee.id}
-                initial={employee}
+                key={selected.id}
+                initial={selected}
+                allowAnySalary={multi}
                 onSave={(next) => {
-                  setEmployee(next);
+                  if (multi) upsertEmployee(next);
+                  else setEmployee(next);
                   setEditing(false);
                   setNotice("Cadastro do colaborador atualizado.");
                 }}
@@ -232,7 +313,9 @@ export function FolhaPage() {
               <p className="text-sm font-semibold">Competências {year}</p>
               <div className="mt-3 grid grid-cols-3 gap-2 sm:grid-cols-4">
                 {MONTHS.map((label, i) => {
-                  const row = map.get(`${kind}-${year}-${String(i + 1).padStart(2, "0")}`);
+                  const row = selected
+                    ? map.get(payrollMapKey(selected.id, year, i, kind))
+                    : undefined;
                   const late = daeDueDate(year, i) < today && (!row || !row.salaryPaid || !row.daePaid);
                   return (
                     <button
@@ -264,7 +347,7 @@ export function FolhaPage() {
                     <p className="text-xs font-semibold uppercase tracking-wide text-mute">
                       {payrollKindLabel[kind]} · {MONTHS[month]} / {year}
                     </p>
-                    <h2 className="mt-1 font-display text-2xl text-ink">{employee.nome}</h2>
+                    <h2 className="mt-1 font-display text-2xl text-ink">{selected.nome}</h2>
                     <p className="text-sm text-mute">
                       {company.nome} · CNPJ {company.cnpj}
                     </p>
@@ -279,13 +362,11 @@ export function FolhaPage() {
                 <div className="no-print mt-4">
                   <label className="text-xs font-medium text-mute">
                     Horas extras / outros acréscimos
-                    <input
-                      type="number"
-                      min="0"
-                      step="0.01"
+                    <MoneyBrInput
                       className="input mt-1 max-w-xs"
-                      value={extras || ""}
-                      onChange={(e) => setExtras(Number(e.target.value) || 0)}
+                      value={extras || 0}
+                      onChange={setExtras}
+                      min={0}
                     />
                   </label>
                 </div>
@@ -304,12 +385,13 @@ export function FolhaPage() {
                       <Row label="Provisão férias + 1/3" value={display.provisionFerias} />
                     </>
                   ) : null}
-                  <Row label="Custo do MEI no mês" value={display.custoMei} strong />
+                  <Row label={multi ? "Custo no mês" : "Custo do MEI no mês"} value={display.custoMei} strong />
                 </dl>
 
                 <p className="mt-4 text-xs text-mute">
-                  O DAE une INSS patronal, FGTS e o INSS descontado do colaborador. É separado do DAS do MEI. A guia
-                  oficial só é gerada no eSocial após fechar a folha.
+                  {multi
+                    ? "Provisão com base nas regras de INSS/FGTS usadas no cálculo. Confirme as guias oficiais no eSocial / Receita."
+                    : "O DAE une INSS patronal, FGTS e o INSS descontado do colaborador. É separado do DAS do MEI. A guia oficial só é gerada no eSocial após fechar a folha."}
                 </p>
 
                 <div className="no-print mt-4 flex flex-wrap gap-2">
@@ -341,12 +423,12 @@ export function FolhaPage() {
             ) : null}
           </div>
         </>
-      )}
-      {display && employee ? (
+      ) : null}
+      {display && selected ? (
         <div className="pdf-capture-host" aria-hidden>
           <FolhaPrintSheet
             company={company}
-            employee={employee}
+            employee={selected}
             year={year}
             month={month}
             kind={kind}
@@ -354,7 +436,7 @@ export function FolhaPage() {
             salaryDue={salaryDue}
             daeDue={daeDue}
           />
-          <HoleriteSheet company={company} employee={employee} year={year} month={month} pay={display} />
+          <HoleriteSheet company={company} employee={selected} year={year} month={month} pay={display} />
         </div>
       ) : null}
     </div>
@@ -390,15 +472,17 @@ function EmployeeForm({
   initial,
   onSave,
   onCancel,
+  allowAnySalary = false,
 }: {
   initial: Employee;
   onSave: (employee: Employee) => void;
   onCancel?: () => void;
+  allowAnySalary?: boolean;
 }) {
   const [draft, setDraft] = useState<Employee>(initial);
   const valid = draft.nome.trim().length > 2 && draft.cpf.replace(/\D/g, "").length === 11 && draft.salario > 0;
   const floor = legalSalaryFloor(draft);
-  const range = salaryOutOfMeiRange(draft);
+  const range = allowAnySalary ? null : salaryOutOfMeiRange(draft);
 
   return (
     <form
@@ -424,41 +508,34 @@ function EmployeeForm({
         <input className="input" value={draft.cbo || ""} onChange={(e) => setDraft({ ...draft, cbo: e.target.value })} />
       </Field>
       <Field label="Admissão">
-        <input
-          type="date"
+        <DateBrInput
           className="input"
-          value={draft.dataAdmissao}
-          onChange={(e) => setDraft({ ...draft, dataAdmissao: e.target.value })}
+          value={draft.dataAdmissao || ""}
+          onChange={(dataAdmissao) => setDraft({ ...draft, dataAdmissao })}
         />
       </Field>
       <Field label="Salário mensal">
-        <input
-          type="number"
-          min="0"
-          step="0.01"
+        <MoneyBrInput
           className="input"
-          value={draft.salario || ""}
-          onChange={(e) => setDraft({ ...draft, salario: Number(e.target.value) })}
+          value={draft.salario || 0}
+          onChange={(salario) => setDraft({ ...draft, salario })}
+          min={0}
         />
       </Field>
       <Field label="Piso da categoria">
-        <input
-          type="number"
-          min="0"
-          step="0.01"
+        <MoneyBrInput
           className="input"
-          value={draft.pisoCategoria || ""}
-          onChange={(e) => setDraft({ ...draft, pisoCategoria: Number(e.target.value) })}
+          value={draft.pisoCategoria || 0}
+          onChange={(pisoCategoria) => setDraft({ ...draft, pisoCategoria })}
+          min={0}
         />
       </Field>
       <Field label="Vale-transporte (mês)">
-        <input
-          type="number"
-          min="0"
-          step="0.01"
+        <MoneyBrInput
           className="input"
-          value={draft.valeTransporte || ""}
-          onChange={(e) => setDraft({ ...draft, valeTransporte: Number(e.target.value) })}
+          value={draft.valeTransporte || 0}
+          onChange={(valeTransporte) => setDraft({ ...draft, valeTransporte })}
+          min={0}
         />
       </Field>
       <Field label="Jornada">
@@ -479,7 +556,9 @@ function EmployeeForm({
         />
       </Field>
       <p className="text-xs text-mute md:col-span-3">
-        Mínimo nacional 2026: {formatMoney(SALARIO_MINIMO)}. Neste cadastro o piso aplicado é {formatMoney(floor)}.
+        {allowAnySalary
+          ? "Simples Nacional: sem limite de um colaborador e sem teto de salário do MEI."
+          : `Mínimo nacional 2026: ${formatMoney(SALARIO_MINIMO)}. Neste cadastro o piso aplicado é ${formatMoney(floor)}.`}
         {range === "abaixo" ? " Salário abaixo do legal." : null}
         {range === "acima" ? " Salário acima do teto do MEI (mínimo ou piso)." : null}
       </p>

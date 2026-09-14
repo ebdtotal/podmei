@@ -91,6 +91,7 @@ function plan_price($plan, $cycle) {
     "pro" => ["month" => 29.9, "year" => 299],
     "premium" => ["month" => 49.9, "year" => 499],
     "contador" => ["month" => 97.9, "year" => 977],
+    "contador_premium" => ["month" => 147.9, "year" => 1477],
   ];
   if (!isset($prices[$plan])) $plan = "pro";
   return $cycle === "year" ? $prices[$plan]["year"] : $prices[$plan]["month"];
@@ -405,7 +406,7 @@ function activate_lead(&$store, $config, $leadIndex) {
     "email" => $lead["email"],
     "nome" => $lead["nome"],
     "passwordHash" => password_hash($temp, PASSWORD_DEFAULT),
-    "role" => $lead["plan"] === "contador" ? "contador" : "pro",
+    "role" => ($lead["plan"] === "contador" || $lead["plan"] === "contador_premium") ? "contador" : "pro",
     "plan" => $lead["plan"],
     "status" => "ativo",
     "mustChangePassword" => false,
@@ -968,12 +969,12 @@ try {
         }
         $store["subscriptions"][$i]["status"] = $in["status"];
       }
-      if (isset($in["plan"]) && in_array($in["plan"], ["pro", "premium", "contador"], true)) {
+      if (isset($in["plan"]) && in_array($in["plan"], ["pro", "premium", "contador", "contador_premium"], true)) {
         $store["subscriptions"][$i]["plan"] = $in["plan"];
         foreach ($store["users"] as $u => $user) {
           if (($user["id"] ?? "") === ($s["userId"] ?? "") && ($user["role"] ?? "") !== "master") {
             $store["users"][$u]["plan"] = $in["plan"];
-            $store["users"][$u]["role"] = $in["plan"] === "contador" ? "contador" : "pro";
+            $store["users"][$u]["role"] = ($in["plan"] === "contador" || $in["plan"] === "contador_premium") ? "contador" : "pro";
           }
         }
       }

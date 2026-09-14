@@ -10,6 +10,7 @@ import {
   LogOut,
   Menu,
   Package,
+  Percent,
   Receipt,
   Scale,
   Shield,
@@ -26,7 +27,14 @@ import { Logo } from "@/components/brand/Logo";
 import { ThemeToggle } from "@/components/brand/ThemeToggle";
 import { useAuth } from "@/lib/auth";
 import { useStore } from "@/lib/store";
-import { hasPremiumAccess, isPremiumPath, plans } from "@/lib/plans";
+import {
+  hasPremiumAccess,
+  isContadorPlan,
+  isPremiumPath,
+  isSimplesNacionalCompany,
+  plans,
+  showsMeiLimits,
+} from "@/lib/plans";
 import { cn } from "@/lib/utils";
 
 const allLinks = [
@@ -44,6 +52,7 @@ const allLinks = [
   { to: "/app/calendario", label: "Calendário", icon: CalendarDays, end: false },
   { to: "/app/metas", label: "Metas", icon: Target, end: false },
   { to: "/app/folha", label: "Folha", icon: Users, end: false },
+  { to: "/app/simples", label: "Simples Nacional", icon: Percent, end: false },
   { to: "/app/relatorios", label: "Relatórios", icon: FileText, end: false },
   { to: "/app/limites", label: "Limites", icon: Gauge, end: false },
 ];
@@ -51,6 +60,7 @@ const allLinks = [
 const reportPaths = [
   "/app/relatorios",
   "/app/relatorio-oficial",
+  "/app/estoque",
   "/app/dre",
   "/app/livro-caixa",
   "/app/livro-razao",
@@ -69,20 +79,43 @@ export function AppShell() {
   const { pathname } = useLocation();
   const [menuOpen, setMenuOpen] = useState(false);
   const isMaster = user?.role === "master";
-  const isContador = user?.plan === "contador" || isMaster;
+  const isContador = isContadorPlan(user?.plan) || isMaster;
+  const isContadorPremium = user?.plan === "contador_premium";
+  const isOfficeTheme = isContadorPremium && isSimplesNacionalCompany(company);
   const premium = hasPremiumAccess(user);
-  const carteiraTo = "/contador";
+  const meiLimits = showsMeiLimits(company);
+  const homeTo = isContadorPremium ? "/contador" : "/app";
+  const carteiraTo = isContadorPremium ? "/contador/carteira" : "/contador";
   const links = useMemo(() => {
-    const base = isContador
-      ? allLinks.map((link) =>
-          link.to === "/contador"
-            ? { ...link, to: carteiraTo, label: isMaster ? "Carteira Contador" : link.label }
-            : link,
-        )
+    let base = isContador
+      ? allLinks.map((link) => {
+          if (link.to === "/contador") {
+            return {
+              ...link,
+              to: carteiraTo,
+              label: isMaster ? "Carteira Contador" : isContadorPremium ? "Carteira de MEIs" : link.label,
+            };
+          }
+          if (link.to === "/app/empresa" && isOfficeTheme) {
+            return { ...link, to: "/app/escritorio", label: "Escritório" };
+          }
+          return link;
+        })
       : allLinks.filter((link) => link.to !== "/contador");
-    if (premium) return base;
-    return base.filter((link) => !isPremiumPath(link.to));
-  }, [isContador, isMaster, premium]);
+    if (isContadorPremium && isOfficeTheme) {
+      base = base.filter((link) => link.to !== "/app/empresa" && link.to !== "/app/limites");
+    } else if (isContadorPremium && !isOfficeTheme) {
+      // MEI da carteira: menu Premium azul (sem Simples / Escritório SN)
+      base = base.filter((link) => link.to !== "/app/simples" && link.to !== "/app/escritorio");
+    } else {
+      base = base.filter((link) => link.to !== "/app/simples");
+    }
+    if (!isSimplesNacionalCompany(company)) {
+      base = base.filter((link) => link.to !== "/app/simples");
+    }
+    const gated = premium ? base : base.filter((link) => !isPremiumPath(link.to));
+    return meiLimits ? gated : gated.filter((link) => link.to !== "/app/limites");
+  }, [carteiraTo, company, isContador, isContadorPremium, isMaster, isOfficeTheme, meiLimits, premium]);
 
   const tabs = useMemo(() => {
     const primary = (premium ? mobilePrimaryPremium : mobilePrimaryPro)
@@ -93,6 +126,7 @@ export function AppShell() {
 
   function linkActive(to: string, end?: boolean) {
     if (to === "/app/relatorios") return reportPaths.includes(pathname);
+    if (to === "/app/escritorio") return pathname.startsWith("/app/escritorio") || pathname.startsWith("/contador/escritorio");
     if (end) return pathname === to;
     return pathname === to || pathname.startsWith(`${to}/`);
   }
@@ -103,12 +137,22 @@ export function AppShell() {
   }
 
   return (
-    <div className="min-h-screen bg-bg text-ink">
-      <aside className="fixed inset-y-0 left-0 z-20 hidden w-60 flex-col border-r border-line bg-paper md:flex">
-        <div className="px-5 py-5">
-          <Logo to="/app" />
+    <div className={cn("min-h-screen bg-bg text-ink", isOfficeTheme && "theme-contador")}>
+      <aside
+        className={cn(
+          "fixed inset-y-0 left-0 z-20 hidden w-60 flex-col border-r border-line md:flex",
+          isOfficeTheme ? "bg-[#f3e8ff]" : "bg-paper",
+        )}
+      >
+        <div className="shrink-0 px-5 py-5">
+          <Logo to={homeTo} />
+          {isContadorPremium ? (
+            <p className="mt-2 text-[11px] font-semibold uppercase tracking-wider text-orange">
+              {isOfficeTheme ? "Meu escritório · Simples" : "MEI da carteira"}
+            </p>
+          ) : null}
         </div>
-        <nav className="flex flex-1 flex-col gap-1 px-3">
+        <nav className="flex min-h-0 flex-1 flex-col gap-1 overflow-y-auto overscroll-contain px-3 pb-2">
           {links.map((link) => (
             <NavLink
               key={link.to}
@@ -127,8 +171,10 @@ export function AppShell() {
             </NavLink>
           ))}
         </nav>
-        <div className="m-3 rounded-xl border border-line bg-bg p-3">
-          <p className="text-[11px] uppercase tracking-wider text-mute">MEI ativo</p>
+        <div className="m-3 shrink-0 rounded-xl border border-line bg-bg p-3">
+          <p className="text-[11px] uppercase tracking-wider text-mute">
+            {isContadorPremium ? "Empresa ativa" : "MEI ativo"}
+          </p>
           <select
             className="input mt-2 py-1.5 text-xs"
             value={activeClientId}
@@ -136,7 +182,13 @@ export function AppShell() {
           >
             {clients.map((c) => (
               <option key={c.id} value={c.id}>
-                {c.status === "arquivado" ? `(Arq.) ${c.company.nome}` : c.company.nome}
+                {isContadorPremium && c.company.regimeTributario === "simples_nacional"
+                  ? `Escritório · ${c.company.nome}`
+                  : c.status === "arquivado"
+                    ? `(Arq.) ${c.company.nome}`
+                    : isContadorPremium
+                      ? `MEI · ${c.company.nome}`
+                      : c.company.nome}
               </option>
             ))}
           </select>
@@ -175,7 +227,7 @@ export function AppShell() {
                 <Menu className="size-5" />
               </button>
               <div className="min-w-0">
-                <Logo to="/app" />
+                <Logo to={homeTo} />
                 {isContador && clients.length > 1 ? (
                   <select
                     className="input mt-2 max-w-[14rem] py-1 text-[11px]"
@@ -259,7 +311,7 @@ export function AppShell() {
           />
           <div className="absolute inset-y-0 left-0 flex w-[min(20rem,88vw)] flex-col bg-paper shadow-xl">
             <div className="flex items-center justify-between gap-2 border-b border-line px-4 py-3">
-              <Logo to="/app" />
+              <Logo to={homeTo} />
               <button
                 type="button"
                 className="grid size-10 place-items-center rounded-xl border border-line bg-bg text-ink"

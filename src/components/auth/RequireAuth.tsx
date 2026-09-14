@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 import { Navigate, useLocation } from "react-router-dom";
 import { useAuth } from "@/lib/auth";
+import { isContadorPlan } from "@/lib/plans";
 
 export function RequireAuth({ children }: { children: ReactNode }) {
   const { user, ready } = useAuth();
@@ -27,7 +28,7 @@ export function RequireAuth({ children }: { children: ReactNode }) {
   ) {
     return <Navigate to="/master" replace />;
   }
-  if (user.plan !== "contador" && user.role !== "master" && location.pathname.startsWith("/contador")) {
+  if (!isContadorPlan(user.plan) && user.role !== "master" && location.pathname.startsWith("/contador")) {
     return <Navigate to="/app" replace />;
   }
   return children;
@@ -50,7 +51,7 @@ export function RequireMaster({ children }: { children: ReactNode }) {
     return <Navigate to={`/entrar?next=${encodeURIComponent(location.pathname)}`} replace />;
   }
   if (user.role !== "master") {
-    return <Navigate to={user.plan === "contador" ? "/contador" : "/app"} replace />;
+    return <Navigate to={isContadorPlan(user.plan) ? "/contador" : "/app"} replace />;
   }
   return children;
 }

@@ -9,6 +9,7 @@ import {
   payrollMap,
 } from "./folha";
 import { proportionalLimit, purchaseLimit, totalPurchases, totalRevenue, yearEntries } from "./mei";
+import { showsMeiLimits, isSimplesNacionalCompany } from "./plans";
 import type { Company, Employee, Entry, MeiClient, PayrollRun } from "./types";
 import { MONTHS } from "./types";
 import { formatDate, formatMoney, todayIso } from "./utils";
@@ -47,10 +48,11 @@ export function buildAlerts(
   labor?: LaborContext,
 ): AppAlert[] {
   const alerts: AppAlert[] = [];
-  const paid = dasPaidMap(entries);
+  const isSn = isSimplesNacionalCompany(company);
+  const paid = isSn ? new Map() : dasPaidMap(entries);
   const year = Number(today.slice(0, 4));
-  const perfil = resolveDasPerfil(company);
-  const totalFor = (y: number, month: number) => dasBreakdown(perfil, y, month).total;
+  const perfil = isSn ? null : resolveDasPerfil(company);
+  const totalFor = (y: number, month: number) => (perfil ? dasBreakdown(perfil, y, month).total : 0);
   const nome = company.nome || "sua empresa";
 
   for (const y of [year - 1, year]) {
@@ -65,6 +67,21 @@ export function buildAlerts(
       if (late && y < year) continue;
       const days = daysBetween(today, due);
       const ref = `${MONTHS[month]}/${y}`;
+      if (isSn) {
+        alerts.push({
+          id: late ? `das-late:${key}` : `das:${key}`,
+          kind: "das",
+          level: late ? "danger" : "warn",
+          title: late
+            ? `DAS Simples de ${ref} em atraso`
+            : `DAS Simples de ${ref} vence em ${days === 0 ? "hoje" : `${days} dia${days === 1 ? "" : "s"}`}`,
+          body: late
+            ? `${nome}: competência em aberto. Venceu em ${formatDate(due)}. Valor conforme o faturamento — confira em Simples Nacional.`
+            : `${nome}: emita a guia até ${formatDate(due)}. O valor varia com o faturamento — veja a provisão em Simples Nacional.`,
+          href: "/app/simples",
+        });
+        continue;
+      }
       alerts.push({
         id: late ? `das-late:${key}` : `das:${key}`,
         kind: "das",
@@ -80,34 +97,36 @@ export function buildAlerts(
 
   const yearList = yearEntries(entries, year);
   const billed = totalRevenue(yearList);
-  const limit = proportionalLimit(company, year);
-  const billedAlert = limitAlert({
-    id: `limite:${year}`,
-    used: billed,
-    limit,
-    titleAt: "Limite de faturamento do MEI estourou",
-    titleNear: (band) => `Faturamento em ${band}% do limite`,
-    name: nome,
-    hint100: "Acima do teto proporcional. Revise antes do desenquadramento.",
-    hint90: "Muito perto do teto de R$ 81 mil (proporcional à abertura).",
-    hint70: "Acompanhe para não cruzar o teto do MEI.",
-  });
-  if (billedAlert) alerts.push(billedAlert);
+  if (showsMeiLimits(company)) {
+    const limit = proportionalLimit(company, year);
+    const billedAlert = limitAlert({
+      id: `limite:${year}`,
+      used: billed,
+      limit,
+      titleAt: "Limite de faturamento do MEI estourou",
+      titleNear: (band) => `Faturamento em ${band}% do limite`,
+      name: nome,
+      hint100: "Acima do teto proporcional. Revise antes do desenquadramento.",
+      hint90: "Muito perto do teto de R$ 81 mil (proporcional à abertura).",
+      hint70: "Acompanhe para não cruzar o teto do MEI.",
+    });
+    if (billedAlert) alerts.push(billedAlert);
 
-  const bought = totalPurchases(yearList);
-  const buyLimit = purchaseLimit(company, year);
-  const buyAlert = limitAlert({
-    id: `limite-compras:${year}`,
-    used: bought,
-    limit: buyLimit,
-    titleAt: "Limite de compras do MEI estourou",
-    titleNear: (band) => `Compras em ${band}% do limite`,
-    name: nome,
-    hint100: "Acima de 80% do teto proporcional de faturamento. Revise as compras de mercadoria.",
-    hint90: "Muito perto do teto de compras (80% do limite proporcional).",
-    hint70: "Acompanhe para não cruzar o teto de compras do MEI.",
-  });
-  if (buyAlert) alerts.push(buyAlert);
+    const bought = totalPurchases(yearList);
+    const buyLimit = purchaseLimit(company, year);
+    const buyAlert = limitAlert({
+      id: `limite-compras:${year}`,
+      used: bought,
+      limit: buyLimit,
+      titleAt: "Limite de compras do MEI estourou",
+      titleNear: (band) => `Compras em ${band}% do limite`,
+      name: nome,
+      hint100: "Acima de 80% do teto proporcional de faturamento. Revise as compras de mercadoria.",
+      hint90: "Muito perto do teto de compras (80% do limite proporcional).",
+      hint70: "Acompanhe para não cruzar o teto de compras do MEI.",
+    });
+    if (buyAlert) alerts.push(buyAlert);
+  }
 
   if (labor && hasActiveEmployee(labor.employee)) {
     alerts.push(...laborAlerts(labor.employee, labor.payrolls, today));

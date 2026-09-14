@@ -3,6 +3,7 @@ import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { Logo } from "@/components/brand/Logo";
 import { emptyWorkspaceFromUser, useAuth } from "@/lib/auth";
 import { allowsExternalPurchaseUi, isIosApp } from "@/lib/native";
+import { isContadorPlan } from "@/lib/plans";
 import { platform } from "@/lib/platform";
 import { bindStoreUser, adoptSharedWorkspaceForUser, useStore } from "@/lib/store";
 
@@ -48,7 +49,8 @@ export function LoginPage() {
       const next = params.get("next");
       const safeNext = next && next.startsWith("/") && !next.startsWith("//") ? next : "";
       if (user.role === "master") navigate(safeNext.startsWith("/master") ? safeNext : "/master", { replace: true });
-      else if (user.plan === "contador") navigate(safeNext || "/contador", { replace: true });
+      else if (user.plan === "contador_premium") navigate(safeNext || "/contador", { replace: true });
+      else if (isContadorPlan(user.plan)) navigate(safeNext || "/contador", { replace: true });
       else navigate(safeNext || "/app", { replace: true });
     } catch (err) {
       setError(err instanceof Error ? err.message : "Não foi possível entrar.");

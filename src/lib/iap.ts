@@ -16,6 +16,10 @@ export const IAP_PRODUCTS: Record<PlanKey, Record<BillingCycle, string>> = {
     month: "br.com.podmei.app.contador.month",
     year: "br.com.podmei.app.contador.year",
   },
+  contador_premium: {
+    month: "br.com.podmei.app.contadorpremium.month",
+    year: "br.com.podmei.app.contadorpremium.year",
+  },
 };
 
 export function iapProductId(plan: PlanKey, cycle: BillingCycle) {

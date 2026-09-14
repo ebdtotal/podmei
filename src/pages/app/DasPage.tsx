@@ -20,6 +20,8 @@ import { useStore } from "@/lib/store";
 import type { DasPerfil, Entry } from "@/lib/types";
 import { MONTHS, MONTHS_SHORT } from "@/lib/types";
 import { cn, currentYear, formatDate, formatMoney, todayIso, uid } from "@/lib/utils";
+import { DateBrInput } from "@/components/ui/DateBrInput";
+import { MoneyBrInput } from "@/components/ui/MoneyBrInput";
 
 type PayForm = {
   month: number;
@@ -231,50 +233,38 @@ export function DasPage() {
           <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
             <label className="block text-xs font-medium text-mute">
               Data do pagamento
-              <input
-                type="date"
+              <DateBrInput
                 className="input mt-1.5"
                 value={payForm.paidAt}
-                onChange={(e) => setPayForm({ ...payForm, paidAt: e.target.value })}
+                onChange={(paidAt) => setPayForm({ ...payForm, paidAt })}
                 required
               />
             </label>
             <label className="block text-xs font-medium text-mute">
               Valor do DAS
-              <input
-                type="number"
-                inputMode="decimal"
-                min="0"
-                step="0.01"
+              <MoneyBrInput
                 className="input mt-1.5"
-                value={payForm.valorDas || ""}
-                onChange={(e) => setPayForm({ ...payForm, valorDas: Number(e.target.value) || 0 })}
+                value={payForm.valorDas || 0}
+                onChange={(valorDas) => setPayForm({ ...payForm, valorDas })}
+                min={0}
               />
             </label>
             <label className="block text-xs font-medium text-mute">
               Juros
-              <input
-                type="number"
-                inputMode="decimal"
-                min="0"
-                step="0.01"
+              <MoneyBrInput
                 className="input mt-1.5"
-                value={payForm.juros || ""}
-                onChange={(e) => setPayForm({ ...payForm, juros: Number(e.target.value) || 0 })}
-                placeholder="0,00"
+                value={payForm.juros || 0}
+                onChange={(juros) => setPayForm({ ...payForm, juros })}
+                min={0}
               />
             </label>
             <label className="block text-xs font-medium text-mute">
               Multa
-              <input
-                type="number"
-                inputMode="decimal"
-                min="0"
-                step="0.01"
+              <MoneyBrInput
                 className="input mt-1.5"
-                value={payForm.multa || ""}
-                onChange={(e) => setPayForm({ ...payForm, multa: Number(e.target.value) || 0 })}
-                placeholder="0,00"
+                value={payForm.multa || 0}
+                onChange={(multa) => setPayForm({ ...payForm, multa })}
+                min={0}
               />
             </label>
           </div>

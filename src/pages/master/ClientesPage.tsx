@@ -576,7 +576,7 @@ export function MasterClientesPage() {
               </article>
             ) : null}
 
-            {snapshot?.workspace.accountant && selected.plan === "contador" ? (
+            {snapshot?.workspace.accountant && (selected.plan === "contador" || selected.plan === "contador_premium") ? (
               <article className="rounded-3xl border border-line bg-paper p-5">
                 <h2 className="font-semibold">Escritório</h2>
                 <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">

@@ -271,28 +271,31 @@ function alert_compute_for_client(array $client, string $today, bool $premium = 
     $out = array_merge($out, alert_labor($employee, $payrolls, $today, $year, $months, $nome));
   }
 
-  $out = array_merge($out, alert_limit_mail(
-    $billed,
-    $limit,
-    $year,
-    $nome,
-    "limite",
-    "Limite de faturamento do MEI estourou",
-    "Faturamento em %d%% do limite",
-    "faturou",
-    "do teto proporcional"
-  ));
-  $out = array_merge($out, alert_limit_mail(
-    $bought,
-    $limit * 0.8,
-    $year,
-    $nome,
-    "limite-compras",
-    "Limite de compras do MEI estourou",
-    "Compras em %d%% do limite",
-    "comprou",
-    "do teto de compras (80% do limite proporcional)"
-  ));
+  $regime = (string) ($company["regimeTributario"] ?? "mei");
+  if ($regime !== "simples_nacional") {
+    $out = array_merge($out, alert_limit_mail(
+      $billed,
+      $limit,
+      $year,
+      $nome,
+      "limite",
+      "Limite de faturamento do MEI estourou",
+      "Faturamento em %d%% do limite",
+      "faturou",
+      "do teto proporcional"
+    ));
+    $out = array_merge($out, alert_limit_mail(
+      $bought,
+      $limit * 0.8,
+      $year,
+      $nome,
+      "limite-compras",
+      "Limite de compras do MEI estourou",
+      "Compras em %d%% do limite",
+      "comprou",
+      "do teto de compras (80% do limite proporcional)"
+    ));
+  }
 
   // Premium: lembrete de eventos/agendamentos no dia (e-mail a partir das 06h, via cron ou app).
   if ($premium) {
@@ -324,11 +327,82 @@ function alert_compute_for_client(array $client, string $today, bool $premium = 
   return $out;
 }
 
-/** @return list<array{key:string,subject:string,body:string}> */
-function alert_compute(array $ws, string $today, bool $premium = false): array {
+function alert_contact_email(array $entry, array $contacts): string {
+  $contactId = (string) ($entry["contactId"] ?? "");
+  $name = strtolower(trim((string) ($entry["contraparte"] ?? "")));
+  foreach ($contacts as $c) {
+    if (!is_array($c)) continue;
+    if ($contactId !== "" && (string) ($c["id"] ?? "") === $contactId) {
+      return strtolower(trim((string) ($c["email"] ?? "")));
+    }
+  }
+  foreach ($contacts as $c) {
+    if (!is_array($c)) continue;
+    if ((string) ($c["kind"] ?? "") !== "cliente") continue;
+    if (strtolower(trim((string) ($c["nome"] ?? ""))) === $name) {
+      return strtolower(trim((string) ($c["email"] ?? "")));
+    }
+  }
+  return "";
+}
+
+/**
+ * Cobrança automática do contador: e-mail ao cliente 3 dias antes, no dia e 3 dias depois.
+ * @return list<array{key:string,subject:string,body:string,to:string}>
+ */
+function alert_cobranca_mails(array $client, string $today, string $escritorio): array {
+  $company = is_array($client["company"] ?? null) ? $client["company"] : [];
+  $entries = is_array($client["entries"] ?? null) ? $client["entries"] : [];
+  $contacts = is_array($client["contacts"] ?? null) ? $client["contacts"] : [];
+  $empresa = trim((string) ($company["nome"] ?? $escritorio));
+  if ($empresa === "") $empresa = "Escritório contábil";
+  $out = [];
+  foreach ($entries as $entry) {
+    if (!is_array($entry)) continue;
+    if ((string) ($entry["status"] ?? "") !== "a_receber") continue;
+    $eid = (string) ($entry["id"] ?? "");
+    if ($eid === "") continue;
+    $due = (string) ($entry["vencimento"] ?? $entry["data"] ?? "");
+    if (!preg_match("/^\\d{4}-\\d{2}-\\d{2}/", $due)) continue;
+    $due = substr($due, 0, 10);
+    $diff = (int) round((strtotime($due . " 12:00:00") - strtotime($today . " 12:00:00")) / 86400);
+    $stage = null;
+    if ($diff === 3) $stage = "m3";
+    elseif ($diff === 0) $stage = "d0";
+    elseif ($diff === -3) $stage = "p3";
+    if ($stage === null) continue;
+    $to = alert_contact_email($entry, $contacts);
+    if (!filter_var($to, FILTER_VALIDATE_EMAIL)) continue;
+    $valor = alert_money((float) ($entry["valor"] ?? 0));
+    $cli = trim((string) ($entry["contraparte"] ?? "cliente"));
+    $desc = trim((string) ($entry["descricao"] ?? "honorários / serviços"));
+    if ($stage === "m3") {
+      $subject = "Lembrete: vencimento em 3 dias — {$empresa}";
+      $body = "Olá, {$cli}.\n\nEm 3 dias (" . alert_date($due) . ") vence o valor de {$valor} referente a {$desc}, junto a {$empresa}.\n\nSe já pagou, desconsidere este aviso.\n\nPODMEI — mensagem automática do escritório.";
+    } elseif ($stage === "d0") {
+      $subject = "Vence hoje — {$empresa}";
+      $body = "Olá, {$cli}.\n\nHoje (" . alert_date($due) . ") vence o valor de {$valor} referente a {$desc}, junto a {$empresa}.\n\nSe já pagou, desconsidere este aviso.\n\nPODMEI — mensagem automática do escritório.";
+    } else {
+      $subject = "Em atraso há 3 dias — {$empresa}";
+      $body = "Olá, {$cli}.\n\nO valor de {$valor} referente a {$desc} venceu em " . alert_date($due) . " e ainda consta em aberto junto a {$empresa}.\n\nSe já pagou, desconsidere este aviso.\n\nPODMEI — mensagem automática do escritório.";
+    }
+    $out[] = [
+      "key" => "cobranca:{$eid}:{$stage}",
+      "subject" => $subject,
+      "body" => $body,
+      "to" => $to,
+    ];
+  }
+  return $out;
+}
+
+/** @return list<array{key:string,subject:string,body:string,to?:string}> */
+function alert_compute(array $ws, string $today, bool $premium = false, bool $contador = false): array {
   $clients = alert_workspace_clients($ws);
   if (!$clients) return [];
   $multi = count($clients) > 1;
+  $accountant = is_array($ws["accountant"] ?? null) ? $ws["accountant"] : [];
+  $escritorio = trim((string) ($accountant["escritorio"] ?? $accountant["nome"] ?? ""));
   $out = [];
   foreach ($clients as $client) {
     $cid = (string) ($client["id"] ?? "");
@@ -338,36 +412,47 @@ function alert_compute(array $ws, string $today, bool $premium = false): array {
       }
       $out[] = $item;
     }
+    if ($contador) {
+      foreach (alert_cobranca_mails($client, $today, $escritorio) as $item) {
+        if ($multi && $cid !== "") {
+          $item["key"] = $cid . ":" . $item["key"];
+        }
+        $out[] = $item;
+      }
+    }
   }
   return $out;
 }
 
 function alert_send_for_user(string $userId): array {
   $pdo = podmei_db();
-  $st = $pdo->prepare("SELECT email, plan FROM users WHERE id = ? LIMIT 1");
+  $st = $pdo->prepare("SELECT email, plan, role FROM users WHERE id = ? LIMIT 1");
   $st->execute([$userId]);
   $user = $st->fetch();
   $email = strtolower(trim((string) ($user["email"] ?? "")));
   $plan = strtolower(trim((string) ($user["plan"] ?? "pro")));
-  $premium = $plan === "premium" || $plan === "contador";
+  $role = strtolower(trim((string) ($user["role"] ?? "")));
+  $premium = $plan === "premium" || $plan === "contador" || $plan === "contador_premium";
+  $contador = $plan === "contador" || $plan === "contador_premium" || $role === "contador";
   $row = podmei_get_workspace($userId);
   $ws = is_array($row["workspace"] ?? null) ? $row["workspace"] : null;
   if (!$ws) return ["sent" => []];
   if ($email === "" && is_array($ws["clients"][0]["company"] ?? null)) {
     $email = strtolower(trim((string) ($ws["clients"][0]["company"]["email"] ?? "")));
   }
-  if (!filter_var($email, FILTER_VALIDATE_EMAIL)) return ["sent" => []];
 
   $today = date("Y-m-d");
   date_default_timezone_set("America/Sao_Paulo");
   $today = date("Y-m-d");
   $sent = [];
-  foreach (alert_compute($ws, $today, $premium) as $item) {
+  foreach (alert_compute($ws, $today, $premium, $contador) as $item) {
+    $to = strtolower(trim((string) ($item["to"] ?? $email)));
+    if (!filter_var($to, FILTER_VALIDATE_EMAIL)) continue;
     $chk = $pdo->prepare("SELECT id FROM alert_mails WHERE user_id = ? AND alert_key = ? LIMIT 1");
     $chk->execute([$userId, $item["key"]]);
     if ($chk->fetch()) continue;
-    $ok = podmei_mail($email, $item["subject"], $item["body"]);
-    podmei_log_email($email, $item["subject"], $ok, $ok ? "" : "mail() retornou false");
+    $ok = podmei_mail($to, $item["subject"], $item["body"]);
+    podmei_log_email($to, $item["subject"], $ok, $ok ? "" : "mail() retornou false");
     if (!$ok) continue;
     $pdo->prepare("INSERT OR IGNORE INTO alert_mails (id,user_id,alert_key,sent_at) VALUES (?,?,?,?)")->execute([
       podmei_uid("alr"), $userId, $item["key"], gmdate("Y-m-d\\TH:i:s\\Z"),

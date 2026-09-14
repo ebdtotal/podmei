@@ -19,7 +19,7 @@ import {
   totalRevenue,
   yearEntries,
 } from "@/lib/mei";
-import { hasPremiumAccess } from "@/lib/plans";
+import { hasPremiumAccess, isSimplesNacionalCompany, showsMeiLimits } from "@/lib/plans";
 import { useStore } from "@/lib/store";
 import { MONTHS, MONTHS_SHORT } from "@/lib/types";
 import { cn, currentYear, formatMoney, formatPercent, monthIndex, todayIso } from "@/lib/utils";
@@ -28,6 +28,8 @@ export function DashboardPage() {
   const { user } = useAuth();
   const premium = hasPremiumAccess(user);
   const { company, entries, employee, payrolls, clients, activeClientId } = useStore();
+  const meiLimits = showsMeiLimits(company);
+  const isSn = isSimplesNacionalCompany(company);
   const [dismissed, setDismissed] = useState(() => dismissedAlertIds());
   const shared = clients.find((c) => c.id === activeClientId)?.sharedInviteId;
   const year = currentYear();
@@ -67,16 +69,20 @@ export function DashboardPage() {
     <div className="space-y-6">
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
-          <p className="text-xs font-semibold uppercase tracking-[0.2em] text-mute">Painel do MEI</p>
+          <p className="text-xs font-semibold uppercase tracking-[0.2em] text-mute">
+            {isSn ? "Painel do escritório · Simples Nacional" : "Painel do MEI"}
+          </p>
           <h1 className="font-display text-3xl text-ink">{company.nome}</h1>
           <p className="text-sm text-mute">
             {company.cnpj} · {company.cidade}/{company.uf}
-            {!premium ? " · Plano Pro" : " · Plano Premium"}
+            {!premium ? " · Plano Pro" : isSn ? " · Contador Premium" : " · Plano Premium"}
           </p>
         </div>
-        <Link to="/app/relatorio-oficial" className="btn-primary">
-          Relatório de receitas do mês
-        </Link>
+        {!isSn ? (
+          <Link to="/app/relatorio-oficial" className="btn-primary">
+            Relatório de receitas do mês
+          </Link>
+        ) : null}
       </div>
 
       {shared ? (
@@ -95,15 +101,21 @@ export function DashboardPage() {
 
       {premium ? (
         <>
-          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
-            <Shortcut to="/app/das" color="bg-orange" icon={Stamp} label="Emitir DAS mensal" />
-            <Shortcut to="/app/dasn" color="bg-blue" icon={FileSpreadsheet} label="Declaração anual" />
+          <div className={cn("grid gap-3 sm:grid-cols-2", isSn ? "xl:grid-cols-4" : "xl:grid-cols-5")}>
+            {!isSn ? (
+              <>
+                <Shortcut to="/app/das" color="bg-orange" icon={Stamp} label="Emitir DAS mensal" />
+                <Shortcut to="/app/dasn" color="bg-blue" icon={FileSpreadsheet} label="Declaração anual" />
+              </>
+            ) : (
+              <Shortcut to="/app/simples" color="bg-navy" icon={Stamp} label="Simples Nacional" />
+            )}
             <Shortcut to="/app/fluxo-caixa" color="bg-navy" icon={Wallet} label="Fluxo de caixa" />
             <Shortcut to="/app/calendario" color="bg-green" icon={CalendarDays} label="Calendário" />
             <Shortcut to="/app/metas" color="bg-navy-2" icon={Target} label="Metas" />
           </div>
           <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-            <Shortcut to="/app/folha" color="bg-navy" icon={Users} label="Folha do colaborador" />
+            <Shortcut to="/app/folha" color="bg-navy" icon={Users} label="Folha" />
             <Shortcut to="/app/extrato" color="bg-green" icon={Landmark} label="Ler extrato bancário" />
             <Shortcut to="/app/nfse" color="bg-navy-2" icon={Receipt} label="Emissão nota fiscal" />
             <Shortcut to="/app/relatorios" color="bg-blue" icon={TrendingUp} label="Relatórios" />
@@ -112,7 +124,9 @@ export function DashboardPage() {
       ) : (
         <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
           <Shortcut to="/app/das" color="bg-orange" icon={Stamp} label="Emitir DAS mensal" />
-          <Shortcut to="/app/limites" color="bg-navy" icon={TrendingUp} label="Limites do MEI" />
+          {meiLimits ? (
+            <Shortcut to="/app/limites" color="bg-navy" icon={TrendingUp} label="Limites do MEI" />
+          ) : null}
           <Shortcut to="/app/extrato" color="bg-green" icon={Landmark} label="Ler extrato bancário" />
           <Shortcut to="/app/relatorios" color="bg-blue" icon={FileSpreadsheet} label="Relatórios" />
         </div>
@@ -230,7 +244,7 @@ export function DashboardPage() {
         </section>
 
         <div className="space-y-4">
-          {premium ? (
+          {premium && !isSn ? (
           <section className="rounded-2xl border border-line bg-paper p-4">
             <h2 className="text-sm font-semibold">Folha do colaborador</h2>
             {hasActiveEmployee(employee) ? (
@@ -258,6 +272,7 @@ export function DashboardPage() {
           </section>
           ) : null}
 
+          {meiLimits ? (
           <section className="rounded-2xl border border-line bg-paper p-4">
             <h2 className="text-sm font-semibold text-ink">Limites do MEI</h2>
             <p className="mt-1 text-xs text-mute">Teto proporcional do ano {year}</p>
@@ -275,7 +290,9 @@ export function DashboardPage() {
               Ver gestão completa dos limites
             </Link>
           </section>
+          ) : null}
 
+          {!isSn ? (
           <section className="rounded-2xl border border-line bg-paper p-4">
             <h2 className="text-sm font-semibold">Declaração de Imposto de Renda</h2>
             <p className="mt-2 text-xs text-mute">Limite de obrigação IRPF {formatMoney(33888)}</p>
@@ -287,7 +304,7 @@ export function DashboardPage() {
               )}
             >
               {ir.precisaDeclarar
-                ? "Pelo lucro do MEI, avalie a obrigação de declarar o IRPF."
+                ? "Pelo lucro, avalie a obrigação de declarar o IRPF."
                 : "Considerando somente a renda como MEI, você não precisa declarar o Imposto de Renda."}
             </div>
             <ul className="mt-3 space-y-1 text-xs text-mute">
@@ -295,13 +312,16 @@ export function DashboardPage() {
               <li>Rendimentos tributáveis {formatMoney(ir.tributavel)}</li>
             </ul>
           </section>
+          ) : null}
 
+          {!isSn ? (
           <section className="rounded-2xl border border-line bg-paper p-4">
             <h2 className="text-sm font-semibold">DASN-SIMEI</h2>
             <p className="mt-2 text-sm">Comércio e indústrias {formatMoney(dasn.comercioIndustria)}</p>
             <p className="text-sm">Prestação de serviços {formatMoney(dasn.servicos)}</p>
             <p className="mt-2 text-xs text-mute">Despesas no ano {formatMoney(expenses)}</p>
           </section>
+          ) : null}
         </div>
       </div>
     </div>

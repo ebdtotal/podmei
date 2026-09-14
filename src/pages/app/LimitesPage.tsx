@@ -40,6 +40,27 @@ export function LimitesPage() {
   const mesesRestantes = Math.max(0, monthsOpen - elapsed);
   const tetoMensalRestante = mesesRestantes ? restante / mesesRestantes : restante;
 
+  if (company.regimeTributario === "simples_nacional") {
+    return (
+      <div className="space-y-6">
+        <div>
+          <h1 className="font-display text-3xl text-ink">Limites de faturamento</h1>
+          <p className="mt-1 text-sm text-mute">
+            Esta empresa está no Simples Nacional (não é MEI). O teto de R$ 81 mil não se aplica.
+          </p>
+        </div>
+        <section className="rounded-2xl border border-line bg-paper p-5">
+          <p className="text-sm text-mute">Faturamento no ano {year}</p>
+          <p className="mt-1 font-display text-3xl text-ink">{formatMoney(billed)}</p>
+          <p className="mt-3 text-sm text-mute">
+            Acompanhe o faturamento nos lançamentos e nos relatórios. Ajuste o regime em Empresa se precisar voltar ao
+            acompanhamento de MEI.
+          </p>
+        </section>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-6">
       <AlertBanners alerts={visibleAlerts(buildAlerts(company, entries)).filter((a) => a.kind === "limite")} />

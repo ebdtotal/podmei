@@ -1,4 +1,4 @@
-import type { PlanKey } from "./types";
+import type { Company, PlanKey } from "./types";
 
 export const plans: Record<
   PlanKey,
@@ -22,7 +22,7 @@ export const plans: Record<
     href: "/app",
     features: [
       "Cadastro da empresa e tipo de atividade",
-      "Clientes, fornecedores, produtos e serviços",
+      "Clientes, fornecedores, produtos com estoque (histórico, custo médio e margem) e serviços",
       "Dashboard enxuto com limite de R$ 81 mil",
       "Lançamentos manuais, texto e áudio",
       "Leitor de extrato PDF e Excel",
@@ -70,6 +70,24 @@ export const plans: Record<
       "Honorários e status de cada cliente",
       "Limite, DAS e relatórios de todos os MEIs",
       "Cadastro do escritório e CRC",
+      "Cobrança automática por e-mail (3 dias antes, no dia e 3 dias depois)",
+    ],
+  },
+  contador_premium: {
+    key: "contador_premium",
+    name: "PODMEI Contador Premium",
+    who: "Para o escritório no Simples Nacional, com as ferramentas do Premium — sem o teto de R$ 81 mil do MEI.",
+    month: 147.9,
+    year: 1477,
+    href: "/contador",
+    features: [
+      "Tudo do PODMEI Contador",
+      "Ferramentas do MEI Premium (caixa, investimentos, metas, folha, DRE)",
+      "Empresa do escritório no Simples Nacional (contador não é MEI)",
+      "Sem limite de faturamento de R$ 81 mil",
+      "Carteira de clientes MEI e do Simples",
+      "Cobrança automática por e-mail nas contas a receber",
+      "Cadastro do escritório e CRC",
     ],
   },
 };
@@ -88,20 +106,36 @@ export const PREMIUM_PATH_PREFIXES = [
 ] as const;
 
 export function normalizePlan(plan: unknown): PlanKey {
+  if (plan === "contador_premium") return "contador_premium";
   if (plan === "contador" || plan === "completo") return "contador";
   if (plan === "premium") return "premium";
   return "pro";
+}
+
+/** Contador ou Contador Premium (módulo carteira / role contador). */
+export function isContadorPlan(plan: unknown): boolean {
+  const p = normalizePlan(plan);
+  return p === "contador" || p === "contador_premium";
 }
 
 export function isPremiumPlan(plan: unknown): boolean {
   return normalizePlan(plan) === "premium";
 }
 
-/** Conta com acesso às funções Premium (assinatura Premium, Contador ou Master). */
+/** Conta com acesso às funções Premium (assinatura Premium, Contador, Contador Premium ou Master). */
 export function hasPremiumAccess(user?: { plan?: string; role?: string } | null): boolean {
   if (!user) return false;
-  if (user.role === "master" || user.plan === "contador") return true;
+  if (user.role === "master" || isContadorPlan(user.plan)) return true;
   return isPremiumPlan(user.plan);
+}
+
+/** Empresa do Simples Nacional: sem teto MEI de R$ 81 mil. */
+export function isSimplesNacionalCompany(company?: Pick<Company, "regimeTributario"> | null): boolean {
+  return company?.regimeTributario === "simples_nacional";
+}
+
+export function showsMeiLimits(company?: Pick<Company, "regimeTributario"> | null): boolean {
+  return !isSimplesNacionalCompany(company);
 }
 
 export function isPremiumPath(pathname: string): boolean {

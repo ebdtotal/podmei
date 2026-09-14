@@ -1,9 +1,12 @@
 import { Copy, Download, MessageCircle, Printer } from "lucide-react";
 import { useMemo, useState } from "react";
 import { Modal } from "@/components/ui/Modal";
+import { DateBrInput } from "@/components/ui/DateBrInput";
 import { MoneyBrInput } from "@/components/ui/MoneyBrInput";
+import { useAuth } from "@/lib/auth";
 import { chargeMessage, chargePhone, pixKeyForCompany, pixPayloadForEntry, resolvePixTipo, whatsappHref } from "@/lib/charge";
 import { exportContasExcel } from "@/lib/exportReports";
+import { isContadorPlan } from "@/lib/plans";
 import { futureOpenRecurrenceIds } from "@/lib/parser";
 import { printOrSharePdf } from "@/lib/print";
 import { useStore } from "@/lib/store";
@@ -12,6 +15,8 @@ import { cn, formatDate, formatMoney, todayIso, uid } from "@/lib/utils";
 
 export function ContasPage() {
   const { company, entries, contacts, updateEntry, addEntry, removeEntries } = useStore();
+  const { user } = useAuth();
+  const contador = isContadorPlan(user?.plan) || user?.role === "master";
   const [charge, setCharge] = useState<Entry | null>(null);
   const [settle, setSettle] = useState<{ entry: Entry; action: "Receber" | "Pagar" } | null>(null);
   const receber = useMemo(
@@ -56,6 +61,9 @@ export function ContasPage() {
           <p className="mt-1 text-sm text-mute">
             A data da operação fica no lançamento. Ao receber ou pagar, informe a data e o valor — o saldo restante continua em aberto.
             Em recorrências, use Parar para excluir só as parcelas futuras.
+            {contador
+              ? " Contador: o sistema envia e-mail automático ao cliente 3 dias antes, no dia do vencimento e 3 dias depois (cadastre o e-mail do cliente)."
+              : null}
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
@@ -330,11 +338,10 @@ function SettlePanel({
       >
         <label className="block text-xs font-medium text-mute">
           {receive ? "Data de recebimento" : "Data de pagamento"}
-          <input
+          <DateBrInput
             className="input mt-1.5"
-            type="date"
             value={date}
-            onChange={(e) => setDate(e.target.value)}
+            onChange={setDate}
             required
           />
         </label>
